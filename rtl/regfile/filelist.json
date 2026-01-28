@@ -1,0 +1,6 @@
+{
+  "top": "regfile",
+  "files": [
+    "regfile.sv"
+  ]
+}

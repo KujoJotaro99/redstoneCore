@@ -1,0 +1,7 @@
+{
+  "top": "alu",
+  "files": [
+    "../pkg/red_pkg.sv",
+    "alu.sv"
+  ]
+}
