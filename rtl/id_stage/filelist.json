@@ -1,7 +1,6 @@
 {
   "top": "id_stage",
   "files": [
-    "decode.sv",
     "id_stage.sv"
   ]
 }

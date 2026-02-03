@@ -19,6 +19,9 @@ module decode
     output logic [3:0] id_ex_alu_op_o,
     output logic [1:0] id_ex_alu_src_a_sel_o,
     output logic [1:0] id_ex_alu_src_b_sel_o,
+    output logic [0:0] id_ex_reg_write_o,
+    output logic [0:0] id_ex_mem_read_o,
+    output logic [0:0] id_ex_mem_write_o,
     output logic [0:0] instr_illegal_o
 );
 
@@ -37,10 +40,14 @@ module decode
         id_ex_alu_op_o = 4'd0;
         id_ex_alu_src_a_sel_o = 2'd0;
         id_ex_alu_src_b_sel_o = 2'd0;
+        id_ex_reg_write_o = 1'b0;
+        id_ex_mem_read_o = 1'b0;
+        id_ex_mem_write_o = 1'b0;
 
         if (instr_valid_i) begin
             case (opcode_o)
                 7'b0110011: begin // r-type
+                    id_ex_reg_write_o = 1'b1;
                     rs1_used_o = 1'b1;
                     rs2_used_o = 1'b1;
                     case (funct3_o)
@@ -81,6 +88,7 @@ module decode
                 end
 
                 7'b0010011: begin // i-type alu
+                    id_ex_reg_write_o = 1'b1;
                     rs1_used_o = 1'b1;
                     id_ex_alu_src_b_sel_o = 2'd1;
                     case (funct3_o)
@@ -105,6 +113,8 @@ module decode
                 end
 
                 7'b0000011: begin // load
+                    id_ex_reg_write_o = 1'b1;
+                    id_ex_mem_read_o = 1'b1;
                     rs1_used_o = 1'b1;
                     id_ex_alu_op_o = 4'd0;
                     id_ex_alu_src_b_sel_o = 2'd1;
@@ -112,6 +122,7 @@ module decode
                 end
 
                 7'b0100011: begin // store
+                    id_ex_mem_write_o = 1'b1;
                     rs1_used_o = 1'b1;
                     rs2_used_o = 1'b1;
                     id_ex_alu_op_o = 4'd0;
@@ -127,6 +138,7 @@ module decode
                 end
 
                 7'b1101111: begin // jal
+                    id_ex_reg_write_o = 1'b1;
                     id_ex_alu_op_o = 4'd0;
                     id_ex_alu_src_a_sel_o = 2'd1;
                     id_ex_alu_src_b_sel_o = 2'd1;
@@ -134,12 +146,14 @@ module decode
                 end
 
                 7'b0110111: begin // lui
+                    id_ex_reg_write_o = 1'b1;
                     id_ex_alu_op_o = 4'd10;
                     id_ex_alu_src_b_sel_o = 2'd1;
                     instr_illegal_o = 1'b0;
                 end
 
                 7'b0010111: begin // auipc
+                    id_ex_reg_write_o = 1'b1;
                     id_ex_alu_op_o = 4'd0;
                     id_ex_alu_src_a_sel_o = 2'd1;
                     id_ex_alu_src_b_sel_o = 2'd1;

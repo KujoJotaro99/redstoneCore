@@ -1,7 +1,6 @@
 {
   "top": "if_stage",
   "files": [
-    "branch_target_buffer.sv",
     "if_stage.sv"
   ]
 }
