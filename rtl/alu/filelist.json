@@ -1,6 +1,7 @@
 {
   "top": "alu",
   "files": [
+    "../pkg.sv",
     "alu.sv"
   ]
 }

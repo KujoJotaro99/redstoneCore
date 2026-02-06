@@ -13,7 +13,7 @@ module if_stage
 
     // ex redirect
     input logic [0:0] ex_if_redirect_valid_i,
-    input logic [WIDTH_P-1:0] ex_if_redirect_pc_i
+    input logic [WIDTH_P-1:0] ex_if_redirect_pc_i,
 
     // btb update interface
     input logic [0:0] btb_update_valid_i,
@@ -151,8 +151,8 @@ module if_stage
     always_ff @(posedge clk_i) begin
         if (!rstn_i) begin
             pc_curr_q <= '0;
-        end else if (flush_i) begin
-            pc_curr_q <= ex_pc_target_i;
+        end else if (ex_if_redirect_valid_i) begin
+            pc_curr_q <= ex_if_redirect_pc_i;
         end else if (if_cache_req_valid_o & cache_if_req_ready_i) begin
             pc_curr_q <= pc_next_w;
         end

@@ -43,11 +43,18 @@ module dm_cache
 
     state_t current_state, next_state;
     logic [WIDTH_P-1:0] if_cache_req_addr_q;
+    localparam INDEX_W = $clog2(LINES_P);
+    localparam TAG_W = WIDTH_P - INDEX_W - 2;
 
     logic [0:0] valid_q [LINES_P-1:0];
-    logic [WIDTH_P-$clog2(LINES_P)-2-1:0] tag_q [LINES_P-1:0]; // 32 - 4 -2
+    logic [TAG_W-1:0] tag_q [LINES_P-1:0];
     logic [WIDTH_P-1:0] data_q [LINES_P-1:0];
+    logic [INDEX_W-1:0] req_index_w;
+    logic [TAG_W-1:0] req_tag_w;
     integer i;
+
+    assign req_index_w = if_cache_req_addr_q[INDEX_W+1:2];
+    assign req_tag_w = if_cache_req_addr_q[WIDTH_P-1:INDEX_W+2];
 
     always_ff @(posedge clk_i) begin
         if (!rstn_i) begin
@@ -66,9 +73,9 @@ module dm_cache
             end
 
             if (current_state == MISS_R && axi_rvalid_i && axi_rready_o) begin
-                valid_q[if_cache_req_addr_q[$clog2(LINES_P)+1:2]] <= 1'b1;
-                tag_q[if_cache_req_addr_q[$clog2(LINES_P)+1:2]] <= if_cache_req_addr_q[WIDTH_P-1:$clog2(LINES_P)+2];
-                data_q[if_cache_req_addr_q[$clog2(LINES_P)+1:2]] <= axi_rdata_i;
+                valid_q[req_index_w] <= 1'b1;
+                tag_q[req_index_w] <= req_tag_w;
+                data_q[req_index_w] <= axi_rdata_i;
             end
         end
     end
@@ -92,7 +99,7 @@ module dm_cache
                 end
             end
             LOOKUP: begin
-                if (valid_q[if_cache_req_addr_q[$clog2(LINES_P)+1:2]] & (tag_q[if_cache_req_addr_q[$clog2(LINES_P)+1:2]] == if_cache_req_addr_q[WIDTH_P-1:$clog2(LINES_P)+2])) begin
+                if (valid_q[req_index_w] & (tag_q[req_index_w] == req_tag_w)) begin
                     next_state = RESP;
                 end else begin
                     next_state = MISS_AR;
@@ -100,7 +107,7 @@ module dm_cache
             end 
             RESP: begin
                 cache_if_rsp_valid_o = 1'b1;
-                cache_if_rsp_instr_o = data_q[if_cache_req_addr_q[$clog2(LINES_P)+1:2]];
+                cache_if_rsp_instr_o = data_q[req_index_w];
 
                 if (if_cache_rsp_ready_i) begin
                     next_state = IDLE;

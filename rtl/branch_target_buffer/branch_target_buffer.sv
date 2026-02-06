@@ -22,17 +22,29 @@ module branch_target_buffer
     input logic [WIDTH_P-1:0] update_target_i
 );
 
+    localparam INDEX_W = $clog2(ENTRIES_P);
+    localparam TAG_W = WIDTH_P - INDEX_W - 2;
+
     logic [0:0] valid_q [ENTRIES_P-1:0];
-    logic [WIDTH_P-$clog2(ENTRIES_P)-2-1:0] tag_q [ENTRIES_P-1:0];
+    logic [TAG_W-1:0] tag_q [ENTRIES_P-1:0];
     logic [0:0] taken_q [ENTRIES_P-1:0];
     logic [WIDTH_P-1:0] target_q [ENTRIES_P-1:0];
+    logic [INDEX_W-1:0] lookup_index_w;
+    logic [TAG_W-1:0] lookup_tag_w;
+    logic [INDEX_W-1:0] update_index_w;
+    logic [TAG_W-1:0] update_tag_w;
     integer i;
 
+    assign lookup_index_w = lookup_pc_i[INDEX_W+1:2];
+    assign lookup_tag_w = lookup_pc_i[WIDTH_P-1:INDEX_W+2];
+    assign update_index_w = update_pc_i[INDEX_W+1:2];
+    assign update_tag_w = update_pc_i[WIDTH_P-1:INDEX_W+2];
+
     // lookup block
-    always_comb begin // lookup_pc[5:2] is row
-        pred_valid_o = valid_q[lookup_pc_i[$clog2(ENTRIES_P)+1:2]] & (tag_q[lookup_pc_i[$clog2(ENTRIES_P)+1:2]] == lookup_pc_i[WIDTH_P-1:$clog2(ENTRIES_P)+2]);
-        pred_taken_o = pred_valid_o & taken_q[lookup_pc_i[$clog2(ENTRIES_P)+1:2]];
-        pred_target_o = target_q[lookup_pc_i[$clog2(ENTRIES_P)+1:2]];
+    always_comb begin
+        pred_valid_o = valid_q[lookup_index_w] & (tag_q[lookup_index_w] == lookup_tag_w);
+        pred_taken_o = pred_valid_o & taken_q[lookup_index_w];
+        pred_target_o = target_q[lookup_index_w];
     end
 
     // update block
@@ -45,10 +57,10 @@ module branch_target_buffer
                 target_q[i] <= '0;
             end
         end else if (update_valid_i) begin
-            valid_q[update_pc_i[$clog2(ENTRIES_P)+1:2]] <= 1'b1;
-            tag_q[update_pc_i[$clog2(ENTRIES_P)+1:2]] <= update_pc_i[WIDTH_P-1:$clog2(ENTRIES_P)+2];
-            taken_q[update_pc_i[$clog2(ENTRIES_P)+1:2]] <= update_taken_i;
-            target_q[update_pc_i[$clog2(ENTRIES_P)+1:2]] <= update_target_i;
+            valid_q[update_index_w] <= 1'b1;
+            tag_q[update_index_w] <= update_tag_w;
+            taken_q[update_index_w] <= update_taken_i;
+            target_q[update_index_w] <= update_target_i;
         end
     end
 

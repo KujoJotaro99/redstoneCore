@@ -25,13 +25,15 @@ module decode
     output logic [0:0] instr_illegal_o
 );
 
-    assign opcode_o = instr_i[6:0];
-    assign funct3_o = instr_i[14:12];
-    assign funct7_o = instr_i[31:25];
-    assign rs1_addr_o = instr_i[19:15];
-    assign rs2_addr_o = instr_i[24:20];
-    assign rd_addr_o = instr_i[11:7];
+    pkg::instr_fields_t instr_fields_w;
 
+    assign instr_fields_w = instr_i;
+    assign opcode_o = instr_fields_w.opcode;
+    assign funct3_o = instr_fields_w.funct3;
+    assign funct7_o = instr_fields_w.funct7;
+    assign rs1_addr_o = instr_fields_w.rs1;
+    assign rs2_addr_o = instr_fields_w.rs2;
+    assign rd_addr_o = instr_fields_w.rd;
 
     always_comb begin
         instr_illegal_o = 1'b0;
@@ -46,130 +48,130 @@ module decode
 
         if (instr_valid_i) begin
             case (opcode_o)
-                7'b0110011: begin // r-type
+                pkg::OPCODE_ARITHMETIC: begin // r-type
                     id_ex_reg_write_o = 1'b1;
                     rs1_used_o = 1'b1;
                     rs2_used_o = 1'b1;
-                    case (funct3_o)
+                    case (instr_fields_w.funct3)
                         3'b000: begin
-                            instr_illegal_o = ~((funct7_o == 7'b0000000) | (funct7_o == 7'b0100000));
-                            id_ex_alu_op_o = (funct7_o == 7'b0100000) ? 4'd1 : 4'd0;
+                            instr_illegal_o = ~((instr_fields_w.funct7 == 7'b0000000) | (instr_fields_w.funct7 == 7'b0100000));
+                            id_ex_alu_op_o = (instr_fields_w.funct7 == 7'b0100000) ? pkg::ALU_SUB : pkg::ALU_ADD;
                         end
                         3'b001: begin
-                            instr_illegal_o = ~(funct7_o == 7'b0000000);
-                            id_ex_alu_op_o = 4'd2;
+                            instr_illegal_o = ~(instr_fields_w.funct7 == 7'b0000000);
+                            id_ex_alu_op_o = pkg::ALU_SLL;
                         end
                         3'b010: begin
-                            instr_illegal_o = ~(funct7_o == 7'b0000000);
-                            id_ex_alu_op_o = 4'd3;
+                            instr_illegal_o = ~(instr_fields_w.funct7 == 7'b0000000);
+                            id_ex_alu_op_o = pkg::ALU_SLT;
                         end
                         3'b011: begin
-                            instr_illegal_o = ~(funct7_o == 7'b0000000);
-                            id_ex_alu_op_o = 4'd4;
+                            instr_illegal_o = ~(instr_fields_w.funct7 == 7'b0000000);
+                            id_ex_alu_op_o = pkg::ALU_SLTU;
                         end
                         3'b100: begin
-                            instr_illegal_o = ~(funct7_o == 7'b0000000);
-                            id_ex_alu_op_o = 4'd5;
+                            instr_illegal_o = ~(instr_fields_w.funct7 == 7'b0000000);
+                            id_ex_alu_op_o = pkg::ALU_XOR;
                         end
                         3'b101: begin
-                            instr_illegal_o = ~((funct7_o == 7'b0000000) | (funct7_o == 7'b0100000));
-                            id_ex_alu_op_o = (funct7_o == 7'b0100000) ? 4'd7 : 4'd6;
+                            instr_illegal_o = ~((instr_fields_w.funct7 == 7'b0000000) | (instr_fields_w.funct7 == 7'b0100000));
+                            id_ex_alu_op_o = (instr_fields_w.funct7 == 7'b0100000) ? pkg::ALU_SRA : pkg::ALU_SRL;
                         end
                         3'b110: begin
-                            instr_illegal_o = ~(funct7_o == 7'b0000000);
-                            id_ex_alu_op_o = 4'd8;
+                            instr_illegal_o = ~(instr_fields_w.funct7 == 7'b0000000);
+                            id_ex_alu_op_o = pkg::ALU_OR;
                         end
                         3'b111: begin
-                            instr_illegal_o = ~(funct7_o == 7'b0000000);
-                            id_ex_alu_op_o = 4'd9;
+                            instr_illegal_o = ~(instr_fields_w.funct7 == 7'b0000000);
+                            id_ex_alu_op_o = pkg::ALU_AND;
                         end
                         default: instr_illegal_o = 1'b1;
                     endcase
                 end
 
-                7'b0010011: begin // i-type alu
+                pkg::OPCODE_ARITHMETIC_IMM: begin // i-type alu
                     id_ex_reg_write_o = 1'b1;
                     rs1_used_o = 1'b1;
                     id_ex_alu_src_b_sel_o = 2'd1;
-                    case (funct3_o)
-                        3'b000: id_ex_alu_op_o = 4'd0;
+                    case (instr_fields_w.funct3)
+                        3'b000: id_ex_alu_op_o = pkg::ALU_ADD;
                         3'b001: begin
-                            instr_illegal_o = ~(funct7_o == 7'b0000000);
-                            id_ex_alu_op_o = 4'd2;
+                            instr_illegal_o = ~(instr_fields_w.funct7 == 7'b0000000);
+                            id_ex_alu_op_o = pkg::ALU_SLL;
                         end
-                        3'b010: id_ex_alu_op_o = 4'd3;
-                        3'b011: id_ex_alu_op_o = 4'd4;
-                        3'b100: id_ex_alu_op_o = 4'd5;
+                        3'b010: id_ex_alu_op_o = pkg::ALU_SLT;
+                        3'b011: id_ex_alu_op_o = pkg::ALU_SLTU;
+                        3'b100: id_ex_alu_op_o = pkg::ALU_XOR;
                         3'b101: begin
-                            instr_illegal_o = ~((funct7_o == 7'b0000000) | (funct7_o == 7'b0100000));
-                            id_ex_alu_op_o = (funct7_o == 7'b0100000) ? 4'd7 : 4'd6;
+                            instr_illegal_o = ~((instr_fields_w.funct7 == 7'b0000000) | (instr_fields_w.funct7 == 7'b0100000));
+                            id_ex_alu_op_o = (instr_fields_w.funct7 == 7'b0100000) ? pkg::ALU_SRA : pkg::ALU_SRL;
                         end
-                        3'b110: id_ex_alu_op_o = 4'd8;
-                        3'b111: id_ex_alu_op_o = 4'd9;
+                        3'b110: id_ex_alu_op_o = pkg::ALU_OR;
+                        3'b111: id_ex_alu_op_o = pkg::ALU_AND;
                         default: begin
                             instr_illegal_o = 1'b0;
                         end
                     endcase
                 end
 
-                7'b0000011: begin // load
+                pkg::OPCODE_LOAD: begin // load
                     id_ex_reg_write_o = 1'b1;
                     id_ex_mem_read_o = 1'b1;
                     rs1_used_o = 1'b1;
-                    id_ex_alu_op_o = 4'd0;
+                    id_ex_alu_op_o = pkg::ALU_ADD;
                     id_ex_alu_src_b_sel_o = 2'd1;
-                    instr_illegal_o = ~((funct3_o == 3'b000) | (funct3_o == 3'b001) | (funct3_o == 3'b010) | (funct3_o == 3'b100) | (funct3_o == 3'b101));
+                    instr_illegal_o = ~((instr_fields_w.funct3 == 3'b000) | (instr_fields_w.funct3 == 3'b001) | (instr_fields_w.funct3 == 3'b010) | (instr_fields_w.funct3 == 3'b100) | (instr_fields_w.funct3 == 3'b101));
                 end
 
-                7'b0100011: begin // store
+                pkg::OPCODE_STORE: begin // store
                     id_ex_mem_write_o = 1'b1;
                     rs1_used_o = 1'b1;
                     rs2_used_o = 1'b1;
-                    id_ex_alu_op_o = 4'd0;
+                    id_ex_alu_op_o = pkg::ALU_ADD;
                     id_ex_alu_src_b_sel_o = 2'd1;
-                    instr_illegal_o = ~((funct3_o == 3'b000) | (funct3_o == 3'b001) | (funct3_o == 3'b010));
+                    instr_illegal_o = ~((instr_fields_w.funct3 == 3'b000) | (instr_fields_w.funct3 == 3'b001) | (instr_fields_w.funct3 == 3'b010));
                 end
 
-                7'b1100011: begin // branch
+                pkg::OPCODE_BRANCH: begin // branch
                     rs1_used_o = 1'b1;
                     rs2_used_o = 1'b1;
-                    id_ex_alu_op_o = 4'd1;
-                    instr_illegal_o = ~((funct3_o == 3'b000) | (funct3_o == 3'b001) | (funct3_o == 3'b100) | (funct3_o == 3'b101) | (funct3_o == 3'b110) | (funct3_o == 3'b111));
+                    id_ex_alu_op_o = pkg::ALU_SUB;
+                    instr_illegal_o = ~((instr_fields_w.funct3 == 3'b000) | (instr_fields_w.funct3 == 3'b001) | (instr_fields_w.funct3 == 3'b100) | (instr_fields_w.funct3 == 3'b101) | (instr_fields_w.funct3 == 3'b110) | (instr_fields_w.funct3 == 3'b111));
                 end
 
-                7'b1101111: begin // jal
+                pkg::OPCODE_JAL: begin // jal
                     id_ex_reg_write_o = 1'b1;
-                    id_ex_alu_op_o = 4'd0;
+                    id_ex_alu_op_o = pkg::ALU_ADD;
                     id_ex_alu_src_a_sel_o = 2'd1;
                     id_ex_alu_src_b_sel_o = 2'd1;
                     instr_illegal_o = 1'b0;
                 end
 
-                7'b0110111: begin // lui
+                pkg::OPCODE_LUI: begin // lui
                     id_ex_reg_write_o = 1'b1;
-                    id_ex_alu_op_o = 4'd10;
+                    id_ex_alu_op_o = pkg::ALU_PASS;
                     id_ex_alu_src_b_sel_o = 2'd1;
                     instr_illegal_o = 1'b0;
                 end
 
-                7'b0010111: begin // auipc
+                pkg::OPCODE_AUIPC: begin // auipc
                     id_ex_reg_write_o = 1'b1;
-                    id_ex_alu_op_o = 4'd0;
+                    id_ex_alu_op_o = pkg::ALU_ADD;
                     id_ex_alu_src_a_sel_o = 2'd1;
                     id_ex_alu_src_b_sel_o = 2'd1;
                     instr_illegal_o = 1'b0;
                 end
 
-                7'b1100111: begin // jalr
+                pkg::OPCODE_JALR: begin // jalr
                     rs1_used_o = 1'b1;
-                    id_ex_alu_op_o = 4'd0;
+                    id_ex_alu_op_o = pkg::ALU_ADD;
                     id_ex_alu_src_b_sel_o = 2'd1;
-                    instr_illegal_o = ~(funct3_o == 3'b000);
+                    instr_illegal_o = ~(instr_fields_w.funct3 == 3'b000);
                 end
 
-                7'b1110011: begin // system (tbd but perhaps ecall, ebreak, mret, and csr stuff)
-                    rs1_used_o = (funct3_o == 3'b001) | (funct3_o == 3'b010) | (funct3_o == 3'b011);
-                    instr_illegal_o = ~((instr_i == 32'h00000073) | (instr_i == 32'h00100073) | (instr_i == 32'h30200073) | (funct3_o != 3'b000));
+                pkg::OPCODE_SYSTEM: begin // system (tbd but perhaps ecall, ebreak, mret, and csr stuff)
+                    rs1_used_o = (instr_fields_w.funct3 == 3'b001) | (instr_fields_w.funct3 == 3'b010) | (instr_fields_w.funct3 == 3'b011);
+                    instr_illegal_o = ~((instr_i == 32'h00000073) | (instr_i == 32'h00100073) | (instr_i == 32'h30200073) | (instr_fields_w.funct3 != 3'b000));
                 end
 
                 default: begin
@@ -183,24 +185,24 @@ module decode
     always_comb begin
         case (opcode_o)
         // i-type
-            7'b0010011, 7'b0000011, 7'b1100111: 
-                imm_gen_o = {{(WIDTH_P-12){instr_i[31]}}, instr_i[31:20]};
+            pkg::OPCODE_ARITHMETIC_IMM, pkg::OPCODE_LOAD, pkg::OPCODE_JALR: 
+                imm_gen_o = {{(WIDTH_P-12){instr_fields_w.funct7[6]}}, instr_fields_w.funct7, instr_fields_w.rs2};
 
             // s-type
-            7'b0100011: 
-                imm_gen_o = {{(WIDTH_P-12){instr_i[31]}}, instr_i[31:25], instr_i[11:7]};
+            pkg::OPCODE_STORE: 
+                imm_gen_o = {{(WIDTH_P-12){instr_fields_w.funct7[6]}}, instr_fields_w.funct7, instr_fields_w.rd};
 
             // b-type
-            7'b1100011: 
-                imm_gen_o = {{(WIDTH_P-13){instr_i[31]}}, instr_i[31], instr_i[7], instr_i[30:25], instr_i[11:8], 1'b0};
+            pkg::OPCODE_BRANCH: 
+                imm_gen_o = {{(WIDTH_P-13){instr_fields_w.funct7[6]}}, instr_fields_w.funct7[6], instr_fields_w.rd[0], instr_fields_w.funct7[5:0], instr_fields_w.rd[4:1], 1'b0};
 
             // u-type
-            7'b0110111, 7'b0010111: 
-                imm_gen_o = {instr_i[31:12], 12'b0};
+            pkg::OPCODE_LUI, pkg::OPCODE_AUIPC: 
+                imm_gen_o = {instr_fields_w.funct7, instr_fields_w.rs2, instr_fields_w.rs1, instr_fields_w.funct3, 12'b0};
 
             // j-type
-            7'b1101111: 
-                imm_gen_o = {{(WIDTH_P-21){instr_i[31]}}, instr_i[31], instr_i[19:12], instr_i[20], instr_i[30:21], 1'b0};
+            pkg::OPCODE_JAL: 
+                imm_gen_o = {{(WIDTH_P-21){instr_fields_w.funct7[6]}}, instr_fields_w.funct7[6], instr_fields_w.rs1, instr_fields_w.funct3, instr_fields_w.rs2[0], instr_fields_w.funct7[5:0], instr_fields_w.rs2[4:1], 1'b0};
 
             default: 
                 imm_gen_o = '0;

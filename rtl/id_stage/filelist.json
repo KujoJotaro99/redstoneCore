@@ -1,6 +1,10 @@
 {
   "top": "id_stage",
   "files": [
+    "../pkg.sv",
+    "../decode/decode.sv",
+    "../hazard_unit/hazard_unit.sv",
+    "../regfile/regfile.sv",
     "id_stage.sv"
   ]
 }
