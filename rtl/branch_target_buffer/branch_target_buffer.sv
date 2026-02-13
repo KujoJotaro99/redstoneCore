@@ -42,7 +42,7 @@ module branch_target_buffer
 
     // lookup block
     always_comb begin
-        pred_valid_o = valid_q[lookup_index_w] & (tag_q[lookup_index_w] == lookup_tag_w);
+        pred_valid_o = valid_q[lookup_index_w] & (tag_q[lookup_index_w] == lookup_tag_w); // entry exists and has been updated before
         pred_taken_o = pred_valid_o & taken_q[lookup_index_w];
         pred_target_o = target_q[lookup_index_w];
     end

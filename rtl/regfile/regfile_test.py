@@ -1,9 +1,7 @@
 import random
-
+from itertools import count
 import cocotb
-
 from cocotb.clock import Clock
-
 from cocotb.triggers import FallingEdge, Timer
 
 CLOCK_PERIOD_NS = 10
@@ -15,123 +13,77 @@ class ModelManager:
         self.depth = int(dut.DEPTH_P.value)
         self.mask = (1 << self.width) - 1
         self.regs = [0 for _ in range(self.depth)]
+        self.index = self.depth + 300
+
+    def get_index(self):
+        return self.index
+
+    def reset(self):
+        self.regs = [0 for _ in range(self.depth)]
 
     def run(self, input_data):
         rs1_addr, rs2_addr, rd_addr, rd_data, rd_we = input_data
+        rs1_data = 0 if rs1_addr == 0 else self.regs[rs1_addr]
+        rs2_data = 0 if rs2_addr == 0 else self.regs[rs2_addr]
 
         if rd_we and rd_addr != 0:
             self.regs[rd_addr] = int(rd_data) & self.mask
 
-        rs1_data = 0 if rs1_addr == 0 else self.regs[rs1_addr]
-        rs2_data = 0 if rs2_addr == 0 else self.regs[rs2_addr]
         return rs1_data, rs2_data
 
 
 class InputManager:
-    def __init__(self, stream):
-        self.data = list(stream)
-        self.index = 0
-        self.valid = False
-        self.current = None
+    def __init__(self, handshake, stream):
+        self.handshake = handshake
+        self.stream = stream
 
-    def drive(self, handshake):
-        if not self.valid and self.index < len(self.data):
-            self.current = self.data[self.index]
-            self.valid = True
-        handshake.drive(self.valid, self.current if self.valid else (0, 0, 0, 0, 0))
-
-    def accept(self):
-        if self.valid:
-            self.index += 1
-            self.valid = False
-            return self.current
-        return None
+    def drive(self):
+        self.handshake.drive(next(self.stream))
 
 
 class ScoreManager:
-    def __init__(self, model):
+    def __init__(self, model, handshake):
         self.model = model
+        self.handshake = handshake
         self.pending = []
-        self.outputs_received = 0
-        self.pipeline_delay = 0
+        self.index = 0
 
-    def update_expected(self, input_data):
-        self.pending.append(self.model.run(input_data))
+    def get_index(self):
+        return self.index
 
-    def check_output(self, output):
-        if output is None:
-            return False
+    def update_expected(self):
+        self.pending.append(self.model.run(self.handshake.input_value()))
 
-        self.outputs_received += 1
-
-        if self.outputs_received <= self.pipeline_delay:
-            return False
-
+    def check_output(self):
         if not self.pending:
+            return False
+
+        output = self.handshake.output_value()
+        if output is None:
             return False
 
         rs1_exp, rs2_exp = self.pending.pop(0)
         rs1_out, rs2_out = output
 
-        assert int(rs1_out) == int(rs1_exp), \
-            f"rs1 mismatch: got {int(rs1_out)} expected {int(rs1_exp)}"
-        assert int(rs2_out) == int(rs2_exp), \
-            f"rs2 mismatch: got {int(rs2_out)} expected {int(rs2_exp)}"
+        assert rs1_out == int(rs1_exp), \
+            f"rs1 mismatch: got {rs1_out} expected {int(rs1_exp)} at transaction {self.index + 1}"
+        assert rs2_out == int(rs2_exp), \
+            f"rs2 mismatch: got {rs2_out} expected {int(rs2_exp)} at transaction {self.index + 1}"
+
+        self.index += 1
         return True
-
-    def drain(self):
-        return False
-
-
-class TestManager:
-    def __init__(self, dut, stream):
-        self.handshake = HandshakeManager(dut)
-        self.input = InputManager(stream)
-        self.model = ModelManager(dut)
-        self.scoreboard = ScoreManager(self.model)
-        self.expected_outputs = len(stream)
-        self.checked = 0
-        self.burst_rate = 1
-        self.absorb_rate = 1
-
-    async def run(self):
-        try:
-            self.input.drive(self.handshake)
-            cycle = 0
-            while self.checked < self.expected_outputs:
-                await FallingEdge(self.handshake.dut.clk_i)
-                cycle += 1
-
-                if (cycle % self.burst_rate) == 0:
-                    if self.handshake.input_accepted():
-                        input_data = self.input.accept()
-                        if input_data is not None:
-                            self.scoreboard.update_expected(input_data)
-                    self.input.drive(self.handshake)
-                else:
-                    self.handshake.drive(False, (0, 0, 0, 0, 0))
-
-                if (cycle % self.absorb_rate) == 0:
-                    if self.scoreboard.pending:
-                        if self.scoreboard.check_output(self.handshake.output_value()):
-                            self.checked += 1
-
-        finally:
-            self.handshake.dut.rs1_addr_i.value = 0
-            self.handshake.dut.rs2_addr_i.value = 0
-            self.handshake.dut.rd_addr_i.value = 0
-            self.handshake.dut.rd_data_i.value = 0
-            self.handshake.dut.rd_we_i.value = 0
 
 
 class HandshakeManager:
     def __init__(self, dut):
         self.dut = dut
         self.last_valid = False
+        self.current = (0, 0, 0, 0, 0)
 
-    def drive(self, valid, data):
+    def drive(self, data):
         rs1_addr, rs2_addr, rd_addr, rd_data, rd_we = data
-        self.last_valid = bool(valid)
+        self.last_valid = True
+        self.current = data
 
         self.dut.rs1_addr_i.value = rs1_addr
         self.dut.rs2_addr_i.value = rs2_addr
@@ -142,8 +94,8 @@ class HandshakeManager:
     def input_accepted(self):
         return self.last_valid
 
-    def output_accepted(self):
-        return self.last_valid
+    def input_value(self):
+        return self.current
 
     def output_value(self):
         signals = [self.dut.rs1_data_o.value, self.dut.rs2_data_o.value]
@@ -152,10 +104,33 @@ class HandshakeManager:
         return tuple(int(signal) for signal in signals)
 
 
+class TestManager:
+    def __init__(self, dut, stream):
+        self.dut = dut
+        self.handshake = HandshakeManager(dut)
+        self.input = InputManager(self.handshake, stream)
+        self.model = ModelManager(dut)
+        self.scoreboard = ScoreManager(self.model, self.handshake)
+
+    async def run(self):
+        try:
+            while self.scoreboard.get_index() < self.model.get_index():
+                self.input.drive()
+                if self.handshake.input_accepted():
+                    self.scoreboard.update_expected()
+                self.scoreboard.check_output()
+                await FallingEdge(self.dut.clk_i)
+        finally:
+            self.dut.rs1_addr_i.value = 0
+            self.dut.rs2_addr_i.value = 0
+            self.dut.rd_addr_i.value = 0
+            self.dut.rd_data_i.value = 0
+            self.dut.rd_we_i.value = 0
+
+
 async def clock_test(dut):
-    await Timer(100, unit='ns')
-    cocotb.start_soon(Clock(dut.clk_i, CLOCK_PERIOD_NS, unit='ns').start())
-    await Timer(10, unit='ns')
+    cocotb.start_soon(Clock(dut.clk_i, CLOCK_PERIOD_NS, unit="ns").start())
+    await Timer(1, unit="ns")
 
 
 async def reset_test(dut):
@@ -165,31 +140,35 @@ async def reset_test(dut):
     dut.rd_addr_i.value = 0
     dut.rd_data_i.value = 0
     dut.rd_we_i.value = 0
+
     await FallingEdge(dut.clk_i)
     await FallingEdge(dut.clk_i)
+
     dut.rstn_i.value = 1
     await FallingEdge(dut.clk_i)
-
-
-def random_stream(depth, width, count):
-    mask = (1 << width) - 1
-    stream = []
-    for rd_addr in range(1, depth):
-        stream.append((0, 0, rd_addr, random.randint(0, mask), 1))
-    for _ in range(count):
-        rs1_addr = random.randint(0, depth - 1)
-        rs2_addr = random.randint(0, depth - 1)
-        rd_addr = random.randint(0, depth - 1)
-        rd_data = random.randint(0, mask)
-        rd_we = random.randint(0, 1)
-        stream.append((rs1_addr, rs2_addr, rd_addr, rd_data, rd_we))
-    return stream
 
 
 @cocotb.test(skip=False)
 async def test_regfile_random(dut):
     await clock_test(dut)
     await reset_test(dut)
+
     random.seed(42)
-    env = TestManager(dut, random_stream(int(dut.DEPTH_P.value), int(dut.WIDTH_P.value), 300))
-    await env.run()
+    mask = (1 << int(dut.WIDTH_P.value)) - 1
+    depth = int(dut.DEPTH_P.value)
+
+    stream = (
+        (0, 0, (index % depth), random.randint(0, mask), 1)
+        if index < depth else
+        (
+            random.randint(0, depth - 1),
+            random.randint(0, depth - 1),
+            random.randint(0, depth - 1),
+            random.randint(0, mask),
+            random.randint(0, 1)
+        )
+        for index in count(1)
+    )
+
+    manager = TestManager(dut, stream)
+    await manager.run()

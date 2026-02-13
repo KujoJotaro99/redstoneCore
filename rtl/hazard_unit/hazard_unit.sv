@@ -42,33 +42,39 @@ module hazard_unit
         id_ex_rs1_fwd_sel_o = 2'd0;
         id_ex_rs2_fwd_sel_o = 2'd0;
 
-        // load use hazard
+        // load use hazard: instruction in IF/ID is valid, instruction in ID/EX is valid, ID/EX writes a register, ID/EX is a load, and ID/EX destination is not x0.
         if (if_id_valid_i && id_ex_valid_i && id_ex_reg_write_i && id_ex_mem_read_i && id_ex_rd_addr_i != '0) begin
+            // IF/ID instruction uses rs1, ID/EX destination is not x0, and ID/EX destination matches IF/ID rs1.
             if (rs1_used_i && id_ex_rd_addr_i != 0 && id_ex_rd_addr_i == rs1_addr_i) begin
                 if_id_stall_o = 1'b1;
                 id_ex_bubble_o = 1'b1;
             end
+            // IF/ID instruction uses rs2, ID/EX destination is not x0, and ID/EX destination matches IF/ID rs2.
             if (rs2_used_i && id_ex_rd_addr_i != 0 && id_ex_rd_addr_i == rs2_addr_i) begin
                 if_id_stall_o = 1'b1;
                 id_ex_bubble_o = 1'b1;
             end
         end
 
-        // mem
+        // ex/mem forwarding: instruction in EX/MEM is valid and writes a register.
         if (ex_mem_valid_i && ex_mem_reg_write_i) begin
+            // ID/EX instruction uses rs1, EX/MEM destination is not x0, and EX/MEM destination matches ID/EX rs1.
             if (id_ex_rs1_used_i && ex_mem_rd_addr_i != 0 && ex_mem_rd_addr_i == id_ex_rs1_addr_i) begin
                 id_ex_rs1_fwd_sel_o = 2'd1;
             end
+            // ID/EX instruction uses rs2, EX/MEM destination is not x0, and EX/MEM destination matches ID/EX rs2.
             if (id_ex_rs2_used_i && ex_mem_rd_addr_i != 0 && ex_mem_rd_addr_i == id_ex_rs2_addr_i) begin
                 id_ex_rs2_fwd_sel_o = 2'd1;
             end
         end
 
-        // wb
+        // mem/wb forwarding: instruction in MEM/WB is valid and writes a register.
         if (mem_wb_valid_i && mem_wb_reg_write_i) begin
+            // ID/EX instruction uses rs1, MEM/WB destination is not x0, MEM/WB destination matches ID/EX rs1, and EX/MEM was not already selected.
             if (id_ex_rs1_used_i && mem_wb_rd_addr_i != 0 && mem_wb_rd_addr_i == id_ex_rs1_addr_i && id_ex_rs1_fwd_sel_o == 2'd0) begin
                 id_ex_rs1_fwd_sel_o = 2'd2;
             end
+            // ID/EX instruction uses rs2, MEM/WB destination is not x0, MEM/WB destination matches ID/EX rs2, and EX/MEM was not already selected.
             if (id_ex_rs2_used_i && mem_wb_rd_addr_i != 0 && mem_wb_rd_addr_i == id_ex_rs2_addr_i && id_ex_rs2_fwd_sel_o == 2'd0) begin
                 id_ex_rs2_fwd_sel_o = 2'd2;
             end
