@@ -38,4 +38,10 @@ package pkg;
         ALU_PASS = 4'd10
     } alu_op_e;
 
+    typedef enum logic [1:0] {
+        WB_ALU = 2'd0,
+        WB_MEM = 2'd1,
+        WB_PC4 = 2'd2
+    } wb_sel_e;
+
 endpackage

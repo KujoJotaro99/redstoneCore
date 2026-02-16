@@ -23,6 +23,7 @@ module hazard_unit
     input logic [0:0] ex_mem_valid_i,
     input logic [$clog2(DEPTH_P)-1:0] ex_mem_rd_addr_i,
     input logic [0:0] ex_mem_reg_write_i,
+    input logic [1:0] ex_mem_wb_sel_i,
 
     // wb interface
     input logic [0:0] mem_wb_valid_i,
@@ -57,7 +58,7 @@ module hazard_unit
         end
 
         // ex/mem forwarding: instruction in EX/MEM is valid and writes a register.
-        if (ex_mem_valid_i && ex_mem_reg_write_i) begin
+        if (ex_mem_valid_i && ex_mem_reg_write_i && ex_mem_wb_sel_i != pkg::WB_MEM) begin
             // ID/EX instruction uses rs1, EX/MEM destination is not x0, and EX/MEM destination matches ID/EX rs1.
             if (id_ex_rs1_used_i && ex_mem_rd_addr_i != 0 && ex_mem_rd_addr_i == id_ex_rs1_addr_i) begin
                 id_ex_rs1_fwd_sel_o = 2'd1;
