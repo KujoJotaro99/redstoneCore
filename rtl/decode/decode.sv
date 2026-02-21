@@ -187,9 +187,9 @@ module decode
                     id_ex_instr_illegal_o = ~(instr_fields_w.funct3 == 3'b000);
                 end
 
-                pkg::OPCODE_SYSTEM: begin // system (tbd but perhaps ecall, ebreak, mret, and csr stuff)
-                    id_ex_rs1_used_o = (instr_fields_w.funct3 == 3'b001) | (instr_fields_w.funct3 == 3'b010) | (instr_fields_w.funct3 == 3'b011);
-                    id_ex_instr_illegal_o = ~((instr_i == 32'h00000073) | (instr_i == 32'h00100073) | (instr_i == 32'h30200073) | (instr_fields_w.funct3 != 3'b000));
+                pkg::OPCODE_SYSTEM: begin // system (csr instructions not implemented yet)
+                    id_ex_rs1_used_o = 1'b0;
+                    id_ex_instr_illegal_o = ~((instr_i == 32'h00000073) | (instr_i == 32'h00100073) | (instr_i == 32'h30200073));
                 end
 
                 default: begin
