@@ -3,7 +3,7 @@
 module branch_target_buffer
 #(
     parameter WIDTH_P = 32,
-    parameter ENTRIES_P = 16
+    parameter DEPTH_P = 16
 ) (
     // meta interface
     input logic [0:0] clk_i,
@@ -22,13 +22,13 @@ module branch_target_buffer
     input logic [WIDTH_P-1:0] update_target_i
 );
 
-    localparam INDEX_W = $clog2(ENTRIES_P);
+    localparam INDEX_W = $clog2(DEPTH_P);
     localparam TAG_W = WIDTH_P - INDEX_W - 2;
 
-    logic [0:0] valid_q [ENTRIES_P-1:0];
-    logic [TAG_W-1:0] tag_q [ENTRIES_P-1:0];
-    logic [0:0] taken_q [ENTRIES_P-1:0];
-    logic [WIDTH_P-1:0] target_q [ENTRIES_P-1:0];
+    logic [0:0] valid_q [DEPTH_P-1:0];
+    logic [TAG_W-1:0] tag_q [DEPTH_P-1:0];
+    logic [0:0] taken_q [DEPTH_P-1:0];
+    logic [WIDTH_P-1:0] target_q [DEPTH_P-1:0];
     logic [INDEX_W-1:0] lookup_index_w;
     logic [TAG_W-1:0] lookup_tag_w;
     logic [INDEX_W-1:0] update_index_w;
@@ -50,7 +50,7 @@ module branch_target_buffer
     // update block
     always_ff @(posedge clk_i) begin
         if (!rstn_i) begin
-            for (i = 0; i < ENTRIES_P; i = i + 1) begin
+            for (i = 0; i < DEPTH_P; i = i + 1) begin
                 valid_q[i] <= 1'b0;
                 tag_q[i] <= '0;
                 taken_q[i] <= 1'b0;
