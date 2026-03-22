@@ -3,7 +3,7 @@
 module if_stage 
 #(
     parameter WIDTH_P = 32,
-    parameter BTB_ENTRIES_P = 16
+    parameter DEPTH_P = 16
 ) (
     // meta interface
     input logic [0:0] clk_i,
@@ -60,7 +60,7 @@ module if_stage
     branch_target_buffer
     #(
         .WIDTH_P(WIDTH_P),
-        .ENTRIES_P(BTB_ENTRIES_P)
+        .DEPTH_P(DEPTH_P)
     )
     u_branch_target_buffer (
         .clk_i(clk_i),
@@ -108,11 +108,11 @@ module if_stage
         end else if (flush_i) begin
             if_req_pending_q <= 1'b0;
         end else begin
-            case ({if_cache_req_valid_o & cache_if_req_ready_i, cache_if_rsp_valid_i & if_cache_rsp_ready_o})
-                2'b10: if_req_pending_q <= 1'b1;
-                2'b01: if_req_pending_q <= 1'b0;
-                default: if_req_pending_q <= if_req_pending_q;
-            endcase
+            if ((if_cache_req_valid_o & cache_if_req_ready_i) && !(cache_if_rsp_valid_i & if_cache_rsp_ready_o)) begin
+                if_req_pending_q <= 1'b1;
+            end else if (!(if_cache_req_valid_o & cache_if_req_ready_i) && (cache_if_rsp_valid_i & if_cache_rsp_ready_o)) begin
+                if_req_pending_q <= 1'b0;
+            end
         end
     end
 
