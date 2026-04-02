@@ -2,7 +2,7 @@ import random
 from itertools import count
 import cocotb
 from cocotb.clock import Clock
-from cocotb.triggers import FallingEdge, Timer
+from cocotb.triggers import FallingEdge, RisingEdge, Timer
 
 CLOCK_PERIOD_NS = 10
 
@@ -11,7 +11,7 @@ class ModelManager:
     def __init__(self, dut):
         self.width = int(dut.WIDTH_P.value)
         self.depth = int(dut.DEPTH_P.value)
-        self.mask = (1 << self.width) - 1
+        self.word_mod = 1 << self.width
         self.regs = [0 for _ in range(self.depth)]
         self.index = self.depth + 300
 
@@ -21,13 +21,24 @@ class ModelManager:
     def reset(self):
         self.regs = [0 for _ in range(self.depth)]
 
+    def unsigned_word(self, value):
+        return int(value) % self.word_mod
+
     def run(self, input_data):
         rs1_addr, rs2_addr, rd_addr, rd_data, rd_we = input_data
+        rd_hit_rs1 = rd_we and rd_addr != 0 and rd_addr == rs1_addr
+        rd_hit_rs2 = rd_we and rd_addr != 0 and rd_addr == rs2_addr
+
         rs1_data = 0 if rs1_addr == 0 else self.regs[rs1_addr]
         rs2_data = 0 if rs2_addr == 0 else self.regs[rs2_addr]
 
+        if rd_hit_rs1:
+            rs1_data = self.unsigned_word(rd_data)
+        if rd_hit_rs2:
+            rs2_data = self.unsigned_word(rd_data)
+
         if rd_we and rd_addr != 0:
-            self.regs[rd_addr] = int(rd_data) & self.mask
+            self.regs[rd_addr] = self.unsigned_word(rd_data)
 
         return rs1_data, rs2_data
 
@@ -116,10 +127,11 @@ class TestManager:
         try:
             while self.scoreboard.get_index() < self.model.get_index():
                 self.input.drive()
+                await RisingEdge(self.dut.clk_i)
+                await Timer(1, unit="ns")
                 if self.handshake.input_accepted():
                     self.scoreboard.update_expected()
                 self.scoreboard.check_output()
-                await FallingEdge(self.dut.clk_i)
         finally:
             self.dut.rs1_addr_i.value = 0
             self.dut.rs2_addr_i.value = 0
@@ -149,22 +161,164 @@ async def reset_test(dut):
 
 
 @cocotb.test(skip=False)
-async def test_regfile_random(dut):
+async def test_regfile_x0_reads_zero(dut):
+    """read x0 on both ports and verify it always returns zero."""
+    await clock_test(dut)
+    await reset_test(dut)
+
+    dut.rs1_addr_i.value = 0
+    dut.rs2_addr_i.value = 0
+    dut.rd_addr_i.value = 1
+    dut.rd_data_i.value = 0x12345678
+    dut.rd_we_i.value = 1
+    await Timer(1, unit="ns")
+
+    assert int(dut.rs1_data_o.value) == 0
+    assert int(dut.rs2_data_o.value) == 0
+
+
+@cocotb.test(skip=False)
+async def test_regfile_write_x0_ignored(dut):
+    """try to write x0, then read x0 back and verify the write was ignored."""
+    await clock_test(dut)
+    await reset_test(dut)
+
+    dut.rs1_addr_i.value = 0
+    dut.rs2_addr_i.value = 0
+    dut.rd_addr_i.value = 0
+    dut.rd_data_i.value = 0xffffffff
+    dut.rd_we_i.value = 1
+    await RisingEdge(dut.clk_i)
+    await Timer(1, unit="ns")
+
+    assert int(dut.rs1_data_o.value) == 0
+    assert int(dut.rs2_data_o.value) == 0
+
+
+@cocotb.test(skip=False)
+async def test_regfile_write_read_next_cycle(dut):
+    """write one normal register, then read it on both ports after the clock edge."""
+    await clock_test(dut)
+    await reset_test(dut)
+
+    dut.rs1_addr_i.value = 0
+    dut.rs2_addr_i.value = 0
+    dut.rd_addr_i.value = 7
+    dut.rd_data_i.value = 0x13572468
+    dut.rd_we_i.value = 1
+    await RisingEdge(dut.clk_i)
+    await Timer(1, unit="ns")
+
+    dut.rs1_addr_i.value = 7
+    dut.rs2_addr_i.value = 7
+    dut.rd_we_i.value = 0
+    await Timer(1, unit="ns")
+
+    assert int(dut.rs1_data_o.value) == 0x13572468
+    assert int(dut.rs2_data_o.value) == 0x13572468
+
+
+@cocotb.test(skip=False)
+async def test_regfile_independent_registers(dut):
+    """write two different registers and verify one write does not change the other register."""
+    await clock_test(dut)
+    await reset_test(dut)
+
+    dut.rd_addr_i.value = 1
+    dut.rd_data_i.value = 0x11111111
+    dut.rd_we_i.value = 1
+    await RisingEdge(dut.clk_i)
+
+    dut.rd_addr_i.value = 2
+    dut.rd_data_i.value = 0x22222222
+    await RisingEdge(dut.clk_i)
+    await Timer(1, unit="ns")
+
+    dut.rs1_addr_i.value = 1
+    dut.rs2_addr_i.value = 2
+    dut.rd_we_i.value = 0
+    await Timer(1, unit="ns")
+
+    assert int(dut.rs1_data_o.value) == 0x11111111
+    assert int(dut.rs2_data_o.value) == 0x22222222
+
+
+@cocotb.test(skip=False)
+async def test_regfile_write_first(dut):
+    """write and read the same register in the same cycle and verify read data uses the new write value."""
+    await clock_test(dut)
+    await reset_test(dut)
+
+    dut.rs1_addr_i.value = 5
+    dut.rs2_addr_i.value = 6
+    dut.rd_addr_i.value = 5
+    dut.rd_data_i.value = 0x12345678
+    dut.rd_we_i.value = 1
+    await Timer(1, unit="ns")
+
+    assert int(dut.rs1_data_o.value) == 0x12345678
+
+    dut.rs1_addr_i.value = 5
+    dut.rs2_addr_i.value = 6
+    dut.rd_addr_i.value = 6
+    dut.rd_data_i.value = 0x87654321
+    dut.rd_we_i.value = 1
+    await Timer(1, unit="ns")
+
+    assert int(dut.rs2_data_o.value) == 0x87654321
+
+    dut.rs1_addr_i.value = 0
+    dut.rs2_addr_i.value = 0
+    dut.rd_addr_i.value = 0
+    dut.rd_data_i.value = 0xffffffff
+    dut.rd_we_i.value = 1
+    await Timer(1, unit="ns")
+
+    assert int(dut.rs1_data_o.value) == 0
+    assert int(dut.rs2_data_o.value) == 0
+
+
+@cocotb.test(skip=False)
+async def test_regfile_sequential_sweep(dut):
+    """write a unique value to every nonzero register, then read each value back."""
+    await clock_test(dut)
+    await reset_test(dut)
+
+    depth = int(dut.DEPTH_P.value)
+
+    for rd_addr in range(1, depth):
+        dut.rd_addr_i.value = rd_addr
+        dut.rd_data_i.value = 0x10000000 + rd_addr
+        dut.rd_we_i.value = 1
+        await RisingEdge(dut.clk_i)
+
+    dut.rd_we_i.value = 0
+    for rs_addr in range(1, depth):
+        dut.rs1_addr_i.value = rs_addr
+        dut.rs2_addr_i.value = rs_addr
+        await Timer(1, unit="ns")
+        assert int(dut.rs1_data_o.value) == 0x10000000 + rs_addr
+        assert int(dut.rs2_data_o.value) == 0x10000000 + rs_addr
+
+
+@cocotb.test(skip=False)
+async def test_regfile_random_stream(dut):
+    """run random reads and writes, then compare both read ports against the python register model."""
     await clock_test(dut)
     await reset_test(dut)
 
     random.seed(42)
-    mask = (1 << int(dut.WIDTH_P.value)) - 1
+    word_mod = 1 << int(dut.WIDTH_P.value)
     depth = int(dut.DEPTH_P.value)
 
     stream = (
-        (0, 0, (index % depth), random.randint(0, mask), 1)
+        (0, 0, (index % depth), random.randrange(0, word_mod), 1)
         if index < depth else
         (
             random.randint(0, depth - 1),
             random.randint(0, depth - 1),
             random.randint(0, depth - 1),
-            random.randint(0, mask),
+            random.randrange(0, word_mod),
             random.randint(0, 1)
         )
         for index in count(1)

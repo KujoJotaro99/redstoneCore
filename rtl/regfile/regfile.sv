@@ -27,15 +27,22 @@ module regfile
         end
     end
 
+    // write first pass through case
+    // technically ex/mem and mem/wb forwarding should prevent this
+    // since even if it gets stale data in ID its overwritten inside EX anyway if possible
     always_comb begin
         if (rs1_addr_i == '0) begin
             rs1_data_o = '0;
+        end else if (rd_we_i && (rd_addr_i == rs1_addr_i)) begin
+            rs1_data_o = rd_data_i;
         end else begin
             rs1_data_o = regs[rs1_addr_i];
         end
 
         if (rs2_addr_i == '0) begin
             rs2_data_o = '0;
+        end else if (rd_we_i && (rd_addr_i == rs2_addr_i)) begin
+            rs2_data_o = rd_data_i;
         end else begin
             rs2_data_o = regs[rs2_addr_i];
         end
