@@ -22,27 +22,35 @@ ALU_PASS = 10
 class ModelManager:
     def __init__(self, dut):
         self.width = int(dut.WIDTH_P.value)
-        self.mask = (1 << self.width) - 1
-        self.ext_mask = (1 << (self.width + 1)) - 1
-        self.shamt_mask = (1 << ((self.width - 1).bit_length())) - 1
+        self.word_mod = 1 << self.width
+        self.shift_width = (self.width - 1).bit_length()
+
+    def unsigned_word(self, value):
+        return int(value) % self.word_mod
+
+    def signed_word(self, value):
+        value = self.unsigned_word(value)
+        sign_bit = 1 << (self.width - 1)
+        return value - self.word_mod if value & sign_bit else value
+
+    def shift_amount(self, value):
+        bits = f"{self.unsigned_word(value):0{self.width}b}"
+        return int(bits[-self.shift_width:], 2)
 
     def run(self, input_data):
         alu_src_a, alu_src_b, alu_op = input_data
-        alu_src_a = int(alu_src_a) & self.mask
-        alu_src_b = int(alu_src_b) & self.mask
-        shamt = alu_src_b & self.shamt_mask
-        alu_src_a_signed = alu_src_a - (1 << self.width) if alu_src_a & (1 << (self.width - 1)) else alu_src_a
-        alu_src_b_signed = alu_src_b - (1 << self.width) if alu_src_b & (1 << (self.width - 1)) else alu_src_b
-
-        alu_add_ext = (alu_src_a + alu_src_b) & self.ext_mask
-        alu_sub_ext = (alu_src_a - alu_src_b) & self.ext_mask
+        alu_src_a = self.unsigned_word(alu_src_a)
+        alu_src_b = self.unsigned_word(alu_src_b)
+        alu_src_a_signed = self.signed_word(alu_src_a)
+        alu_src_b_signed = self.signed_word(alu_src_b)
+        shift_amount = self.shift_amount(alu_src_b)
 
         if alu_op == ALU_ADD:
-            alu_result = alu_add_ext & self.mask
+            alu_result = self.unsigned_word(alu_src_a + alu_src_b)
         elif alu_op == ALU_SUB:
-            alu_result = alu_sub_ext & self.mask
+            alu_result = self.unsigned_word(alu_src_a - alu_src_b)
         elif alu_op == ALU_SLL:
-            alu_result = (alu_src_a << shamt) & self.mask
+            alu_result = self.unsigned_word(alu_src_a << shift_amount)
         elif alu_op == ALU_SLT:
             alu_result = 1 if alu_src_a_signed < alu_src_b_signed else 0
         elif alu_op == ALU_SLTU:
@@ -50,9 +58,9 @@ class ModelManager:
         elif alu_op == ALU_XOR:
             alu_result = alu_src_a ^ alu_src_b
         elif alu_op == ALU_SRL:
-            alu_result = alu_src_a >> shamt
+            alu_result = alu_src_a >> shift_amount
         elif alu_op == ALU_SRA:
-            alu_result = (alu_src_a_signed >> shamt) & self.mask
+            alu_result = self.unsigned_word(alu_src_a_signed >> shift_amount)
         elif alu_op == ALU_OR:
             alu_result = alu_src_a | alu_src_b
         elif alu_op == ALU_AND:
@@ -64,7 +72,7 @@ class ModelManager:
 
         alu_zero = 1 if alu_result == 0 else 0
         alu_neg = (alu_result >> (self.width - 1)) & 1
-        alu_borrow = ((alu_sub_ext if alu_op == ALU_SUB else alu_add_ext) >> self.width) & 1
+        alu_borrow = int(alu_src_a < alu_src_b) if alu_op == ALU_SUB else int((alu_src_a + alu_src_b) >= self.word_mod)
         alu_overflow = 1 if (
             (alu_op == ALU_ADD and ((alu_src_a >> (self.width - 1)) == (alu_src_b >> (self.width - 1))) and ((alu_result >> (self.width - 1)) != (alu_src_a >> (self.width - 1)))) or
             (alu_op == ALU_SUB and ((alu_src_a >> (self.width - 1)) != (alu_src_b >> (self.width - 1))) and ((alu_result >> (self.width - 1)) != (alu_src_a >> (self.width - 1))))
@@ -238,7 +246,154 @@ def random_stream(width, count):
 
 
 @cocotb.test(skip=False)
-async def test_alu_random(dut):
+async def test_alu_add(dut):
+    """add two numbers and check normal result, wraparound carry, signed overflow, negative output, and zero output."""
+    await init_test(dut)
+    env = TestManager(dut, [
+        (0x00000001, 0x00000002, ALU_ADD),
+        (0xffffffff, 0x00000001, ALU_ADD),
+        (0x7fffffff, 0x00000001, ALU_ADD),
+        (0x80000000, 0x80000000, ALU_ADD),
+        (0x00000000, 0x00000000, ALU_ADD),
+    ])
+    await env.run()
+
+
+@cocotb.test(skip=False)
+async def test_alu_sub(dut):
+    """subtract two numbers and check normal result, borrow, signed overflow, negative output, and zero output."""
+    await init_test(dut)
+    env = TestManager(dut, [
+        (0x00000003, 0x00000001, ALU_SUB),
+        (0x00000000, 0x00000001, ALU_SUB),
+        (0x80000000, 0x00000001, ALU_SUB),
+        (0x7fffffff, 0xffffffff, ALU_SUB),
+        (0x12345678, 0x12345678, ALU_SUB),
+    ])
+    await env.run()
+
+
+@cocotb.test(skip=False)
+async def test_alu_sll(dut):
+    """shift left by common amounts and confirm only low shift bits are used when source b is 32."""
+    await init_test(dut)
+    env = TestManager(dut, [
+        (0x00000001, 0x00000000, ALU_SLL),
+        (0x00000001, 0x00000001, ALU_SLL),
+        (0x00000001, 0x0000001f, ALU_SLL),
+        (0x00000001, 0x00000020, ALU_SLL),
+        (0x80000001, 0x00000004, ALU_SLL),
+    ])
+    await env.run()
+
+
+@cocotb.test(skip=False)
+async def test_alu_slt(dut):
+    """compare values as signed numbers, including negative vs positive, equal values, and min vs max."""
+    await init_test(dut)
+    env = TestManager(dut, [
+        (0xffffffff, 0x00000001, ALU_SLT),
+        (0x00000001, 0xffffffff, ALU_SLT),
+        (0xffffffff, 0xfffffffe, ALU_SLT),
+        (0x00000005, 0x00000005, ALU_SLT),
+        (0x80000000, 0x7fffffff, ALU_SLT),
+    ])
+    await env.run()
+
+
+@cocotb.test(skip=False)
+async def test_alu_sltu(dut):
+    """compare values as unsigned numbers, where high-bit values are large instead of negative."""
+    await init_test(dut)
+    env = TestManager(dut, [
+        (0xffffffff, 0x00000001, ALU_SLTU),
+        (0x00000001, 0xffffffff, ALU_SLTU),
+        (0x00000005, 0x00000005, ALU_SLTU),
+        (0x00000000, 0x00000001, ALU_SLTU),
+        (0x80000000, 0x7fffffff, ALU_SLTU),
+    ])
+    await env.run()
+
+
+@cocotb.test(skip=False)
+async def test_alu_xor(dut):
+    """xor bit patterns and verify matching bits become 0 while different bits become 1."""
+    await init_test(dut)
+    env = TestManager(dut, [
+        (0xaaaaaaaa, 0x55555555, ALU_XOR),
+        (0xffffffff, 0xffffffff, ALU_XOR),
+        (0x00000000, 0xffffffff, ALU_XOR),
+    ])
+    await env.run()
+
+
+@cocotb.test(skip=False)
+async def test_alu_srl(dut):
+    """shift right logically and verify zeros enter from the left, even when input sign bit is 1."""
+    await init_test(dut)
+    env = TestManager(dut, [
+        (0x80000000, 0x00000000, ALU_SRL),
+        (0x80000000, 0x00000001, ALU_SRL),
+        (0x80000000, 0x0000001f, ALU_SRL),
+        (0x80000000, 0x00000020, ALU_SRL),
+        (0xffffffff, 0x00000004, ALU_SRL),
+    ])
+    await env.run()
+
+
+@cocotb.test(skip=False)
+async def test_alu_sra(dut):
+    """shift right arithmetically and verify negative values keep filling with 1s from the left."""
+    await init_test(dut)
+    env = TestManager(dut, [
+        (0x80000000, 0x00000000, ALU_SRA),
+        (0x80000000, 0x00000001, ALU_SRA),
+        (0x80000000, 0x0000001f, ALU_SRA),
+        (0x80000000, 0x00000020, ALU_SRA),
+        (0x7fffffff, 0x00000004, ALU_SRA),
+    ])
+    await env.run()
+
+
+@cocotb.test(skip=False)
+async def test_alu_or(dut):
+    """or bit patterns and verify each output bit is 1 when either input bit is 1."""
+    await init_test(dut)
+    env = TestManager(dut, [
+        (0xaaaaaaaa, 0x55555555, ALU_OR),
+        (0x00000000, 0x00000000, ALU_OR),
+        (0x12345678, 0x0000ffff, ALU_OR),
+    ])
+    await env.run()
+
+
+@cocotb.test(skip=False)
+async def test_alu_and(dut):
+    """and bit patterns and verify each output bit is 1 only when both input bits are 1."""
+    await init_test(dut)
+    env = TestManager(dut, [
+        (0xaaaaaaaa, 0x55555555, ALU_AND),
+        (0xffffffff, 0x00000000, ALU_AND),
+        (0x12345678, 0x0000ffff, ALU_AND),
+    ])
+    await env.run()
+
+
+@cocotb.test(skip=False)
+async def test_alu_pass(dut):
+    """pass source b through unchanged, proving source a does not affect this operation."""
+    await init_test(dut)
+    env = TestManager(dut, [
+        (0x00000000, 0x12345678, ALU_PASS),
+        (0xffffffff, 0x00000000, ALU_PASS),
+        (0x55555555, 0x80000000, ALU_PASS),
+    ])
+    await env.run()
+
+
+@cocotb.test(skip=False)
+async def test_alu_random_stream(dut):
+    """run many random alu operations and compare every output against the python model."""
     await init_test(dut)
     random.seed(42)
     env = TestManager(dut, random_stream(int(dut.WIDTH_P.value), 400))
