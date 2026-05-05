@@ -55,6 +55,7 @@ module ex_stage
     // forwarding interface
     input logic [WIDTH_P-1:0] ex_mem_fwd_data_i,
     input logic [WIDTH_P-1:0] mem_wb_fwd_data_i,
+    output logic [WIDTH_P-1:0] ex_mem_fwd_data_o,
 
     // mem interface
     input logic [0:0] mem_ex_ready_i,
@@ -170,6 +171,8 @@ module ex_stage
             default: branch_taken_w = 1'b0;
         endcase
     end
+
+    assign ex_mem_fwd_data_o = (ex_mem_wb_sel_o == pkg::WB_PC4) ? ex_mem_pc4_o : ex_mem_alu_result_o;
 
     // ex mem pipeline block
     always_ff @(posedge clk_i) begin
