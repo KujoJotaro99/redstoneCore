@@ -1,7 +1,7 @@
 # RedstoneCore
 
 <p align="center">
-  <img src="./docs/redstoneCore.png" alt="RedstoneCore pipeline block diagram" width="720">
+  <img src="./docs/logo.png" alt="RedstoneCore pipeline block diagram" width="720">
 </p>
 
 ## Project Overview
