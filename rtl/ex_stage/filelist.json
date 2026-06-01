@@ -1,0 +1,8 @@
+{
+  "top": "ex_stage",
+  "files": [
+    "../pkg.sv",
+    "../alu/alu.sv",
+    "ex_stage.sv"
+  ]
+}

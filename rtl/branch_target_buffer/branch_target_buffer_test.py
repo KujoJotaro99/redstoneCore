@@ -23,24 +23,33 @@ class ModelManager:
         self.entries = {}
 
     def decode_pc(self, pc):
-        bits = f"{int(pc) % self.word_mod:0{self.width}b}"
-        index_bits = bits[-(self.index_width + 2):-2]
-        tag_bits = bits[:-(self.index_width + 2)]
-        return int(index_bits, 2), int(tag_bits or "0", 2)
+        word_addr = (int(pc) % self.word_mod) // 4
+        index = word_addr % self.depth
+        tag = word_addr // self.depth
+        return index, tag
 
     def run(self, input_data):
         lookup_pc, update_valid, update_pc, update_taken, update_target = input_data
         lookup_index, lookup_tag = self.decode_pc(lookup_pc)
         entry = self.entries.get(lookup_index)
         pred_valid = int(entry is not None and entry["tag"] == lookup_tag)
-        pred_taken = pred_valid & (entry["taken"] if entry else 0)
+        pred_taken = int(pred_valid and entry["state"] >= 2)
         pred_target = entry["target"] if entry else 0
 
         if update_valid:
             update_index, update_tag = self.decode_pc(update_pc)
+            entry = self.entries.get(update_index)
+
+            if entry is None or entry["tag"] != update_tag:
+                state = 2 if update_taken else 1
+            elif update_taken:
+                state = min(entry["state"] + 1, 3)
+            else:
+                state = max(entry["state"] - 1, 0)
+
             self.entries[update_index] = {
                 "tag": update_tag,
-                "taken": int(bool(update_taken)),
+                "state": state,
                 "target": int(update_target) % self.word_mod,
             }
 
@@ -247,6 +256,47 @@ async def test_branch_target_buffer_not_taken_entry(dut):
     stream = [
         (pc, 1, pc, 0, 0x00000100),
         (pc, 0, 0x00000000, 0, 0x00000000),
+    ]
+
+    manager = TestManager(dut, stream, len(stream))
+    await manager.run()
+
+
+@cocotb.test(skip=False)
+async def test_branch_target_buffer_two_bit_taken_hysteresis(dut):
+    """train a branch strongly taken, then verify one miss does not flip the prediction."""
+    await clock_test(dut)
+    await reset_test(dut)
+
+    pc = 0x00000034
+    target = 0x00000140
+    stream = [
+        (pc, 1, pc, 1, target),  # new entry becomes weakly taken
+        (pc, 1, pc, 1, target),  # weakly taken predicts taken, then becomes strongly taken
+        (pc, 1, pc, 0, target),  # strongly taken still predicts taken, then becomes weakly taken
+        (pc, 1, pc, 0, target),  # weakly taken still predicts taken, then becomes weakly not taken
+        (pc, 0, 0x00000000, 0, 0x00000000),  # now predicts not taken
+    ]
+
+    manager = TestManager(dut, stream, len(stream))
+    await manager.run()
+
+
+@cocotb.test(skip=False)
+async def test_branch_target_buffer_two_bit_not_taken_saturation(dut):
+    """train a branch strongly not taken and verify it takes two hits to predict taken again."""
+    await clock_test(dut)
+    await reset_test(dut)
+
+    pc = 0x00000038
+    target = 0x00000180
+    stream = [
+        (pc, 1, pc, 0, target),  # new entry becomes weakly not taken
+        (pc, 1, pc, 0, target),  # weakly not taken predicts not taken, then becomes strongly not taken
+        (pc, 1, pc, 0, target),  # strongly not taken stays strongly not taken
+        (pc, 1, pc, 1, target),  # strongly not taken still predicts not taken, then becomes weakly not taken
+        (pc, 1, pc, 1, target),  # weakly not taken still predicts not taken, then becomes weakly taken
+        (pc, 0, 0x00000000, 0, 0x00000000),  # now predicts taken
     ]
 
     manager = TestManager(dut, stream, len(stream))

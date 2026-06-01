@@ -22,7 +22,9 @@ module regfile
     logic [WIDTH_P-1:0] regs [DEPTH_P-1:0];
 
     always_ff @(posedge clk_i) begin
-        if (rd_we_i && (rd_addr_i != '0)) begin
+        if (!rstn_i) begin
+            // n/a
+        end if (rd_we_i && (rd_addr_i != '0)) begin
             regs[rd_addr_i] <= rd_data_i;
         end
     end

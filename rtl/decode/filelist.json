@@ -1,0 +1,7 @@
+{
+  "top": "decode",
+  "files": [
+    "../pkg.sv",
+    "decode.sv"
+  ]
+}

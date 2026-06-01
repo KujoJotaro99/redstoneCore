@@ -21,9 +21,6 @@ class ModelManager:
     def reset(self):
         self.regs = [0 for _ in range(self.depth)]
 
-    def unsigned_word(self, value):
-        return int(value) % self.word_mod
-
     def run(self, input_data):
         rs1_addr, rs2_addr, rd_addr, rd_data, rd_we = input_data
         rd_hit_rs1 = rd_we and rd_addr != 0 and rd_addr == rs1_addr
@@ -33,12 +30,12 @@ class ModelManager:
         rs2_data = 0 if rs2_addr == 0 else self.regs[rs2_addr]
 
         if rd_hit_rs1:
-            rs1_data = self.unsigned_word(rd_data)
+            rs1_data = int(rd_data) % self.word_mod
         if rd_hit_rs2:
-            rs2_data = self.unsigned_word(rd_data)
+            rs2_data = int(rd_data) % self.word_mod
 
         if rd_we and rd_addr != 0:
-            self.regs[rd_addr] = self.unsigned_word(rd_data)
+            self.regs[rd_addr] = int(rd_data) % self.word_mod
 
         return rs1_data, rs2_data
 

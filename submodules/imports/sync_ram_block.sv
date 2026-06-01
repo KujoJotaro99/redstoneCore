@@ -21,8 +21,11 @@ module sync_ram_block #(
     integer byte_idx;
 
     initial begin
+        for (i = 0; i < DEPTH_P; i = i + 1) begin
+            mem_array[i] = '0;
+        end
         if (filename_p != "") begin
-            $readmemh(filename_p, mem_array, 0, DEPTH_P-1);
+            $readmemh(filename_p, mem_array);
         end
 // `ifndef SYNTHESIS
 //         for (i = 0; i < DEPTH_P; i = i + 1) begin

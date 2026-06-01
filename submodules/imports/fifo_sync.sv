@@ -18,11 +18,17 @@ module fifo_sync
 
     logic [$clog2(DEPTH_P):0] wr_ptr_l, rd_ptr_l, rd_ptr_next_w;
     logic [WIDTH_P-1:0] data_o_bypass_l, data_o_l;
+    logic [0:0] full_w;
+    logic [0:0] empty_w;
+    logic [0:0] one_entry_w;
     logic [0:0] bypass_w;
 
     // full empty and bypass logic
-    assign ready_o = ~((wr_ptr_l[$clog2(DEPTH_P)] != rd_ptr_l[$clog2(DEPTH_P)]) && (wr_ptr_l[$clog2(DEPTH_P)-1:0] == rd_ptr_l[$clog2(DEPTH_P)-1:0])); // not full
-    assign valid_o = (wr_ptr_l[$clog2(DEPTH_P):0] != rd_ptr_l[$clog2(DEPTH_P):0]); // not empty
+    assign full_w = ((wr_ptr_l[$clog2(DEPTH_P)] != rd_ptr_l[$clog2(DEPTH_P)]) && (wr_ptr_l[$clog2(DEPTH_P)-1:0] == rd_ptr_l[$clog2(DEPTH_P)-1:0]));
+    assign empty_w = (wr_ptr_l[$clog2(DEPTH_P):0] == rd_ptr_l[$clog2(DEPTH_P):0]);
+    assign one_entry_w = (wr_ptr_l[$clog2(DEPTH_P):0] == (rd_ptr_l[$clog2(DEPTH_P):0] + 1'b1));
+    assign ready_o = ~full_w | (valid_o & ready_i);
+    assign valid_o = ~empty_w;
     assign bypass_w = (wr_ptr_l[$clog2(DEPTH_P):0] == rd_ptr_next_w[$clog2(DEPTH_P):0]);
 
     // next ptr logic
@@ -83,6 +89,6 @@ module fifo_sync
         .data_o(data_o_l)
     );
 
-    assign data_o = bypass_w ? data_o_bypass_l : data_o_l;
+    assign data_o = empty_w ? data_i : ((bypass_w | one_entry_w) ? data_o_bypass_l : data_o_l);
 
 endmodule

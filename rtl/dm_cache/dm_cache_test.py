@@ -117,6 +117,7 @@ class HandshakeManager:
         self.dut.mem_cache_req_ready_i.value = 1
         self.dut.mem_cache_rsp_valid_i.value = 1 if self.mem_valid else 0
         self.dut.mem_cache_rsp_rdata_i.value = self.mem_data
+        self.dut.mem_cache_rsp_resp_i.value = 0
 
     def update_bus(self):
         if self.mem_clear:
@@ -139,6 +140,7 @@ class HandshakeManager:
 
         self.dut.mem_cache_rsp_valid_i.value = 1 if self.mem_valid else 0
         self.dut.mem_cache_rsp_rdata_i.value = self.mem_data
+        self.dut.mem_cache_rsp_resp_i.value = 0
 
     def input_accepted(self):
         return self.last_valid and self.last_ready
@@ -195,6 +197,7 @@ class TestManager:
             self.dut.mem_cache_req_ready_i.value = 0
             self.dut.mem_cache_rsp_valid_i.value = 0
             self.dut.mem_cache_rsp_rdata_i.value = 0
+            self.dut.mem_cache_rsp_resp_i.value = 0
 
 
 async def clock_test(dut):
@@ -213,6 +216,7 @@ async def reset_test(dut):
     dut.mem_cache_req_ready_i.value = 0
     dut.mem_cache_rsp_valid_i.value = 0
     dut.mem_cache_rsp_rdata_i.value = 0
+    dut.mem_cache_rsp_resp_i.value = 0
 
     await FallingEdge(dut.clk_i)
     await FallingEdge(dut.clk_i)

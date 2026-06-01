@@ -1,0 +1,7 @@
+{
+  "top": "hazard_unit",
+  "files": [
+    "../pkg.sv",
+    "hazard_unit.sv"
+  ]
+}

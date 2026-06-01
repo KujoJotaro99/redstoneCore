@@ -3,44 +3,43 @@ TOPLEVEL_LANG ?= verilog
 
 FILELIST_JSON := filelist.json
 
-FILELIST_SOURCES := $(shell python3 -c "import json; \
-    j=json.load(open('$(FILELIST_JSON)')); \
-    print(' '.join(j['files']))")
+FILELIST_SOURCES := $(shell python3 -c "import json; print(' '.join(json.load(open('$(FILELIST_JSON)'))['files']))")
+TOPLEVEL := $(shell python3 -c "import json; print(json.load(open('$(FILELIST_JSON)'))['top'])")
 
 VERILOG_SOURCES := $(FILELIST_SOURCES)
 
-TOPLEVEL := $(shell python3 -c "import json; \
-    print(json.load(open('$(FILELIST_JSON)'))['top'])")
-	
 MODULE := regfile_test
 
 COCOTB_LOG_LEVEL ?= INFO
-
-COMPILE_ARGS += -g2012
-
+SIM_BUILD ?= sim_build
 WAVES ?= 1
 
-TB_SV := regfile_tb.sv
+ifeq ($(SIM),verilator)
+    ifeq ($(WAVES),1)
+        COMPILE_ARGS += --trace --trace-structs --trace-fst
+        SIM_ARGS += --trace --trace-file $(SIM_BUILD)/$(TOPLEVEL).fst
+    endif
+    COMPILE_ARGS += --sv
+else ifeq ($(SIM),icarus)
+    COMPILE_ARGS += -g2012
+else
+    $(error unsupported SIM=$(SIM), use SIM=verilator or SIM=icarus)
+endif
 
-ifneq ($(filter sv lint clean,$(MAKECMDGOALS)),)
+.PHONY: python lint clean
+
+python: clean
+	$(MAKE) results.xml MODULE=$(MODULE)
+
+lint:
+	verilator --lint-only -Wall --sv $(FILELIST_SOURCES) --top-module $(TOPLEVEL)
+
+clean::
+	rm -rf sim_build __pycache__ .pytest_cache
+	rm -f *.pyc *.vcd *.fst results.xml
+
+ifneq ($(filter lint clean,$(MAKECMDGOALS)),)
     # skip cocotb include for non-cocotb targets
 else
 include $(shell cocotb-config --makefile)/Makefile.sim
 endif
-
-.PHONY: clean
-clean::
-	rm -rf sim_build __pycache__ .pytest_cache *.pyc *.vcd *.fst results.xml sim_sv
-
-lint:
-	verilator --lint-only $(FILELIST_SOURCES) --top-module $(TOPLEVEL)
-
-.PHONY: python
-python: SIM=icarus
-python: clean
-	$(MAKE) MODULE=$(MODULE)
-
-# .PHONY: sv
-# sv: clean
-# 	iverilog $(COMPILE_ARGS) -s regfile_tb -o sim_sv $(VERILOG_SOURCES) $(TB_SV)
-# 	vvp sim_sv

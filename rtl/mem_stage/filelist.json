@@ -1,0 +1,7 @@
+{
+  "top": "mem_stage",
+  "files": [
+    "../pkg.sv",
+    "mem_stage.sv"
+  ]
+}

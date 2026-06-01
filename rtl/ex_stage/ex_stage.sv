@@ -23,16 +23,13 @@ module ex_stage
     // id interface
     input logic [0:0] id_ex_valid_i,
     output logic [0:0] ex_id_ready_o,
+    input logic [WIDTH_P-1:0] id_ex_instr_i,
     input logic [WIDTH_P-1:0] id_ex_pc_i,
     input logic [WIDTH_P-1:0] id_ex_pc4_i,
     input logic [WIDTH_P-1:0] id_ex_rs1_data_i,
     input logic [WIDTH_P-1:0] id_ex_rs2_data_i,
     input logic [WIDTH_P-1:0] id_ex_imm_i,
-    input logic [$clog2(DEPTH_P)-1:0] id_ex_rs1_addr_i,
-    input logic [$clog2(DEPTH_P)-1:0] id_ex_rs2_addr_i,
     input logic [$clog2(DEPTH_P)-1:0] id_ex_rd_addr_i,
-    input logic [0:0] id_ex_rs1_used_i,
-    input logic [0:0] id_ex_rs2_used_i,
     input logic [3:0] id_ex_alu_op_i,
     input logic [1:0] id_ex_alu_src_a_sel_i,
     input logic [1:0] id_ex_alu_src_b_sel_i,
@@ -48,6 +45,7 @@ module ex_stage
     input logic [0:0] id_ex_pred_taken_i,
     input logic [WIDTH_P-1:0] id_ex_pred_target_i,
     input logic [0:0] id_ex_instr_illegal_i,
+    input logic [0:0] id_ex_instr_access_fault_i,
     input logic [1:0] id_ex_rs1_fwd_sel_i,
     input logic [1:0] id_ex_rs2_fwd_sel_i,
     input logic [1:0] id_ex_wb_sel_i,
@@ -60,6 +58,7 @@ module ex_stage
     // mem interface
     input logic [0:0] mem_ex_ready_i,
     output logic [0:0] ex_mem_valid_o, 
+    output logic [WIDTH_P-1:0] ex_mem_instr_o,
     output logic [WIDTH_P-1:0] ex_mem_pc_o, 
     output logic [WIDTH_P-1:0] ex_mem_pc4_o, 
     output logic [WIDTH_P-1:0] ex_mem_alu_result_o, 
@@ -70,6 +69,7 @@ module ex_stage
     output logic [0:0] ex_mem_mem_write_o,
     output logic [2:0] ex_mem_funct3_o,
     output logic [0:0] ex_mem_instr_illegal_o,
+    output logic [0:0] ex_mem_instr_access_fault_o,
     output logic [1:0] ex_mem_wb_sel_o
 
 );
@@ -178,6 +178,7 @@ module ex_stage
     always_ff @(posedge clk_i) begin
         if (!rstn_i) begin
             ex_mem_valid_o <= 1'b0;
+            ex_mem_instr_o <= '0;
             ex_mem_pc_o <= '0;
             ex_mem_pc4_o <= '0;
             ex_mem_alu_result_o <= '0;
@@ -188,9 +189,11 @@ module ex_stage
             ex_mem_mem_write_o <= 1'b0;
             ex_mem_funct3_o <= '0;
             ex_mem_instr_illegal_o <= 1'b0;
+            ex_mem_instr_access_fault_o <= 1'b0;
             ex_mem_wb_sel_o <= '0;
         end else if (flush_i) begin
             ex_mem_valid_o <= 1'b0;
+            ex_mem_instr_o <= '0;
             ex_mem_pc_o <= '0;
             ex_mem_pc4_o <= '0;
             ex_mem_alu_result_o <= '0;
@@ -201,9 +204,11 @@ module ex_stage
             ex_mem_mem_write_o <= 1'b0;
             ex_mem_funct3_o <= '0;
             ex_mem_instr_illegal_o <= 1'b0;
+            ex_mem_instr_access_fault_o <= 1'b0;
             ex_mem_wb_sel_o <= '0;
         end else if (ex_id_ready_o) begin
             ex_mem_valid_o <= id_ex_valid_i;
+            ex_mem_instr_o <= id_ex_instr_i;
             ex_mem_pc_o <= id_ex_pc_i;
             ex_mem_pc4_o <= id_ex_pc4_i;
             ex_mem_alu_result_o <= alu_result_w;
@@ -214,6 +219,7 @@ module ex_stage
             ex_mem_mem_write_o <= id_ex_mem_write_i;
             ex_mem_funct3_o <= id_ex_funct3_i;
             ex_mem_instr_illegal_o <= id_ex_instr_illegal_i;
+            ex_mem_instr_access_fault_o <= id_ex_instr_access_fault_i;
             ex_mem_wb_sel_o <= id_ex_wb_sel_i;
         end
     end
