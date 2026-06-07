@@ -116,4 +116,7 @@ redstoneCore/
 |       |-- fifo_sync.sv
 |       |-- sync_ram_block.sv
 |-- syn/
+|   |-- icebreaker/
+|       |-- Makefile
+|       |-- icebreaker.pcf
 ```
