@@ -207,6 +207,10 @@ module decode
                     id_ex_instr_illegal_o = ~(funct3_w == pkg::ALU_FUNCT3_ADD_SUB);
                 end
 
+                pkg::OPCODE_MISC_MEM: begin // fence
+                    id_ex_instr_illegal_o = ~(funct3_w == 3'b000);
+                end
+
                 pkg::OPCODE_SYSTEM: begin // system
                     id_ex_instr_illegal_o = 1'b1; // under construction for now
                 end

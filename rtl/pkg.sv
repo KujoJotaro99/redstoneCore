@@ -16,6 +16,7 @@ package pkg;
     typedef enum logic [6:0] {
         OPCODE_LOAD = 7'b0000011,
         OPCODE_STORE = 7'b0100011,
+        OPCODE_MISC_MEM = 7'b0001111,
         OPCODE_ARITHMETIC_IMM = 7'b0010011,
         OPCODE_ARITHMETIC = 7'b0110011,
         OPCODE_BRANCH = 7'b1100011,

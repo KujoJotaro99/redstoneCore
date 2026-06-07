@@ -7,7 +7,7 @@ module top
     parameter BTB_DEPTH_P = 16,
     parameter CACHE_LINES_P = 16,
     parameter RAM_ADDR_WIDTH_P = 16,
-    parameter DMEM_RAM_BASE_P = 16'h1000
+    parameter logic [RAM_ADDR_WIDTH_P-1:0] DMEM_RAM_BASE_P = 16'h1000
 ) (
     // meta interface
     input logic [0:0] clk_i,

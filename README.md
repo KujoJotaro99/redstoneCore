@@ -6,7 +6,7 @@
 
 RedstoneCore is a 5-stage, in-order RV32I core written in SystemVerilog.
 
-This checkpoint is the base integer core: fetch, decode, execute, memory, writeback, hazard handling, branch prediction, split instruction/data caches, AXI-Lite memory access, and a top-level simulation wrapper with unified RAM.
+This checkpoint is the base integer core: fetch, decode, execute, memory, writeback, hazard handling, branch prediction, split instruction/data caches, AXI-Lite memory access, and a top-level simulation wrapper with unified dual-port RAM.
 
 ## Current ISA
 
@@ -16,17 +16,16 @@ Supported now:
 - 32-bit aligned instruction fetch
 - byte, halfword, and word load/store data paths
 - branch and jump control flow
+- `FENCE` as an in-order no-op for base `RV32I`
 
 Future target:
 
 - `Zicsr` for CSR instructions and machine trap groundwork
 - `M` for multiply/divide
 - `C` for compressed instructions
-- `A` for atomics if shared memory, locks, or OS-style software are needed
-- `B` for bitmanip performance and compiler codegen support
-- `Zifencei` if instruction memory can be modified and re-fetched
-
-For an integer embedded core, `RV32IMC_Zicsr_Zifencei` is a strong next target. Add `A` for atomics. Add `B` for useful optimization, not strict necessity. `F/D` only needed for hardware floating point.
+- `A` for atomics
+- `B` for bitmanip
+- `Zifencei` for self-modifying code support
 
 ## Architecture
 
@@ -44,59 +43,39 @@ Pipeline:
 
 Memory system:
 
-- split instruction and data `dm_cache` instances
-- two `axil_master` instances
-- shared imported `axil_dp_ram`
-- `fifo_sync` prefetch buffering in IF
+- Split instruction and data cache
+- Two AXIL master controllers
+- Shared Dual Port RAM
+- Prefetch FIFO Buffer in IF
 
-## Verification
+## Quick Start
 
-Unit and top-level tests use cocotb + Verilator.
-
-Run top regression:
+Compile and run all tests:
 
 ```sh
+# Compile test programs
+cd programs/rv32i && make && cd ../compliance_I && make && cd ../..
+
+# Run tests from rtl/top
 cd rtl/top
-make python
+make python          # Unit tests (RTL components)
+make CUSTOM          # Custom rv32i functional tests
+make COMPLIANCE_I    # Official RV32I compliance tests
 ```
 
-Build RV32I programs first if `.mem` files are missing:
+See `programs/README.md` for details on test structure and regenerating compliance signatures with Sail.
 
-```sh
-cd programs/rv32i
-make
-```
-
-Run lint:
-
-```sh
-cd rtl/top
-make lint
-```
-
-Current program tests cover arithmetic, immediates, bitwise ops, shifts, branches, loads/stores, signed loads, store masks, dependency chains, loops, function calls, bubble sort, binary search, and prefix sum.
+**Current status**: All 39 `COMPLIANCE_I` tests pass. All custom functional tests pass.
 
 ## Project Structure
 
 ```text
 redstoneCore/
-|-- docs/
-|   |-- diagram.drawio
-|   |-- diagram.svg
-|   |-- logo_dark.png
-|   |-- logo_light.png
-|   |-- VERIFICATION.md
+|-- docs/                         # Diagrams and documentation
 |-- programs/
-|   |-- rv32i/
-|       |-- Makefile
-|       |-- link.ld
-|       |-- add_two/
-|       |-- add_loop/
-|       |-- branch_matrix/
-|       |-- bubble_sort/
-|       |-- binary_search/
-|       |-- prefix_sum/
-|-- rtl/
+|   |-- rv32i/                    # Custom C-based functional tests
+|   |-- compliance_I/             # Official RV32I compliance tests (ACT4)
+|-- rtl/                          # SystemVerilog modules
 |   |-- alu/
 |   |-- axil_master/
 |   |-- branch_target_buffer/
@@ -108,15 +87,8 @@ redstoneCore/
 |   |-- if_stage/
 |   |-- mem_stage/
 |   |-- regfile/
-|   |-- top/
+|   |-- top/                      # Top-level testbench
 |   |-- pkg.sv
-|-- submodules/
-|   |-- imports/
-|       |-- axil_dp_ram.v
-|       |-- fifo_sync.sv
-|       |-- sync_ram_block.sv
-|-- syn/
-|   |-- icebreaker/
-|       |-- Makefile
-|       |-- icebreaker.pcf
+|-- submodules/imports/           # External modules (FIFO, RAM)
+|-- syn/icebreaker/               # Synthesis config
 ```
