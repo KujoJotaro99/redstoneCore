@@ -5,7 +5,9 @@ module top
     parameter WIDTH_P = 32,
     parameter DEPTH_P = 32,
     parameter BTB_DEPTH_P = 16,
-    parameter CACHE_LINES_P = 16,
+    parameter CACHE_SIZE_BYTES_P = 4096,
+    parameter CACHE_LINE_SIZE_BYTES_P = 16,
+    parameter CACHE_WAYS_P = 4,
     parameter RAM_ADDR_WIDTH_P = 16,
     parameter logic [RAM_ADDR_WIDTH_P-1:0] DMEM_RAM_BASE_P = 16'h1000
 ) (
@@ -395,10 +397,12 @@ module top
         .mem_access_fault_o(mem_access_fault_o)
     );
 
-    dm_cache
+    sa4_cache
     #(
         .WIDTH_P(WIDTH_P),
-        .LINES_P(CACHE_LINES_P)
+        .CACHE_SIZE_BYTES_P(CACHE_SIZE_BYTES_P),
+        .LINE_SIZE_BYTES_P(CACHE_LINE_SIZE_BYTES_P),
+        .WAYS_P(CACHE_WAYS_P)
     )
     u_icache (
         .clk_i(clk_i),
@@ -425,10 +429,12 @@ module top
         .mem_cache_rsp_resp_i(axil_icache_rsp_resp_w)
     );
 
-    dm_cache
+    sa4_cache
     #(
         .WIDTH_P(WIDTH_P),
-        .LINES_P(CACHE_LINES_P)
+        .CACHE_SIZE_BYTES_P(CACHE_SIZE_BYTES_P),
+        .LINE_SIZE_BYTES_P(CACHE_LINE_SIZE_BYTES_P),
+        .WAYS_P(CACHE_WAYS_P)
     )
     u_dcache (
         .clk_i(clk_i),

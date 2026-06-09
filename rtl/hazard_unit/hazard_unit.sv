@@ -74,6 +74,20 @@ module hazard_unit
             end
         end
 
+        // ex/mem load hazard: load data cannot be forwarded from EX/MEM.
+        if (if_id_valid_i && ex_mem_valid_i && ex_mem_reg_write_i && (ex_mem_wb_sel_i == pkg::WB_MEM) && ex_mem_rd_addr_i != '0) begin
+            // IF/ID instruction uses rs1, EX/MEM load destination is not x0, and EX/MEM destination matches IF/ID rs1.
+            if (rs1_used_i && ex_mem_rd_addr_i != 0 && ex_mem_rd_addr_i == rs1_addr_i) begin
+                if_id_stall_o = 1'b1;
+                id_ex_bubble_o = 1'b1;
+            end
+            // IF/ID instruction uses rs2, EX/MEM load destination is not x0, and EX/MEM destination matches IF/ID rs2.
+            if (rs2_used_i && ex_mem_rd_addr_i != 0 && ex_mem_rd_addr_i == rs2_addr_i) begin
+                if_id_stall_o = 1'b1;
+                id_ex_bubble_o = 1'b1;
+            end
+        end
+
         // ex/mem forwarding: instruction in EX/MEM is valid and writes a register.
         if (ex_mem_valid_i && ex_mem_reg_write_i && (ex_mem_wb_sel_i != pkg::WB_MEM)) begin
             // ID/EX instruction uses rs1, EX/MEM destination is not x0, and EX/MEM destination matches ID/EX rs1.

@@ -59,11 +59,15 @@ module mem_stage
     logic [0:0] cache_mem_req_pending_q;
     logic [0:0] cache_access_w;
     logic [0:0] wb_ready_w;
+    logic [WIDTH_P-1:0] cache_req_addr_q;
+    logic [2:0] cache_req_funct3_q;
     logic [WIDTH_P-1:0] store_data_w;
     logic [(WIDTH_P/8)-1:0] store_mask_w;
     logic [WIDTH_P-1:0] load_data_w;
-    logic [1:0] addr_low_w;
-    logic [0:0] addr_half_w;
+    logic [1:0] store_addr_low_w;
+    logic [0:0] store_addr_half_w;
+    logic [1:0] load_addr_low_w;
+    logic [0:0] load_addr_half_w;
     logic [7:0] rs2_byte_w;
     logic [15:0] rs2_half_w;
     logic [WIDTH_P-1:0] store_byte0_w;
@@ -94,8 +98,10 @@ module mem_stage
     assign cache_access_w = ex_mem_valid_i & (ex_mem_mem_read_i | ex_mem_mem_write_i); // if no read or write for instr, then passthrough
     assign wb_ready_w = ~stall_i;
     assign mem_ex_ready_o = ~stall_i & ~flush_i & (~mem_wb_valid_o | wb_ready_w) & (~cache_access_w | (cache_mem_req_pending_q & cache_mem_rsp_valid_i));
-    assign addr_low_w = ex_mem_alu_result_i[1:0];
-    assign addr_half_w = ex_mem_alu_result_i[1];
+    assign store_addr_low_w = ex_mem_alu_result_i[1:0];
+    assign store_addr_half_w = ex_mem_alu_result_i[1];
+    assign load_addr_low_w = cache_req_addr_q[1:0];
+    assign load_addr_half_w = cache_req_addr_q[1];
     assign rs2_byte_w = ex_mem_rs2_data_i[7:0];
     assign rs2_half_w = ex_mem_rs2_data_i[15:0];
     assign store_byte0_w = {24'b0, rs2_byte_w};
@@ -104,18 +110,18 @@ module mem_stage
     assign store_byte3_w = {rs2_byte_w, 24'b0};
     assign store_half0_w = {16'b0, rs2_half_w};
     assign store_half1_w = {rs2_half_w, 16'b0};
-    assign load_byte0_signed_w = 32'(signed'(cache_mem_rsp_rdata_i[7:0]));
-    assign load_byte1_signed_w = 32'(signed'(cache_mem_rsp_rdata_i[15:8]));
-    assign load_byte2_signed_w = 32'(signed'(cache_mem_rsp_rdata_i[23:16]));
-    assign load_byte3_signed_w = 32'(signed'(cache_mem_rsp_rdata_i[31:24]));
-    assign load_half0_signed_w = 32'(signed'(cache_mem_rsp_rdata_i[15:0]));
-    assign load_half1_signed_w = 32'(signed'(cache_mem_rsp_rdata_i[31:16]));
-    assign load_byte0_unsigned_w = 32'(unsigned'(cache_mem_rsp_rdata_i[7:0]));
-    assign load_byte1_unsigned_w = 32'(unsigned'(cache_mem_rsp_rdata_i[15:8]));
-    assign load_byte2_unsigned_w = 32'(unsigned'(cache_mem_rsp_rdata_i[23:16]));
-    assign load_byte3_unsigned_w = 32'(unsigned'(cache_mem_rsp_rdata_i[31:24]));
-    assign load_half0_unsigned_w = 32'(unsigned'(cache_mem_rsp_rdata_i[15:0]));
-    assign load_half1_unsigned_w = 32'(unsigned'(cache_mem_rsp_rdata_i[31:16]));
+    assign load_byte0_signed_w = {{24{cache_mem_rsp_rdata_i[7]}}, cache_mem_rsp_rdata_i[7:0]};
+    assign load_byte1_signed_w = {{24{cache_mem_rsp_rdata_i[15]}}, cache_mem_rsp_rdata_i[15:8]};
+    assign load_byte2_signed_w = {{24{cache_mem_rsp_rdata_i[23]}}, cache_mem_rsp_rdata_i[23:16]};
+    assign load_byte3_signed_w = {{24{cache_mem_rsp_rdata_i[31]}}, cache_mem_rsp_rdata_i[31:24]};
+    assign load_half0_signed_w = {{16{cache_mem_rsp_rdata_i[15]}}, cache_mem_rsp_rdata_i[15:0]};
+    assign load_half1_signed_w = {{16{cache_mem_rsp_rdata_i[31]}}, cache_mem_rsp_rdata_i[31:16]};
+    assign load_byte0_unsigned_w = {24'b0, cache_mem_rsp_rdata_i[7:0]};
+    assign load_byte1_unsigned_w = {24'b0, cache_mem_rsp_rdata_i[15:8]};
+    assign load_byte2_unsigned_w = {24'b0, cache_mem_rsp_rdata_i[23:16]};
+    assign load_byte3_unsigned_w = {24'b0, cache_mem_rsp_rdata_i[31:24]};
+    assign load_half0_unsigned_w = {16'b0, cache_mem_rsp_rdata_i[15:0]};
+    assign load_half1_unsigned_w = {16'b0, cache_mem_rsp_rdata_i[31:16]};
 
     // store lane mask + shifted write data logic
     always_comb begin
@@ -124,7 +130,7 @@ module mem_stage
 
         case (ex_mem_funct3_i)
             3'b000: begin
-                case (addr_low_w)
+                case (store_addr_low_w)
                     2'b00: begin store_mask_w = 4'b0001; store_data_w = store_byte0_w; end
                     2'b01: begin store_mask_w = 4'b0010; store_data_w = store_byte1_w; end
                     2'b10: begin store_mask_w = 4'b0100; store_data_w = store_byte2_w; end
@@ -132,7 +138,7 @@ module mem_stage
                 endcase
             end
             3'b001: begin
-                if (addr_half_w) begin
+                if (store_addr_half_w) begin
                     store_mask_w = 4'b1100;
                     store_data_w = store_half1_w;
                 end else begin
@@ -149,10 +155,10 @@ module mem_stage
 
     // load byte/halfword extract + sign extension logic
     always_comb begin
-        case (ex_mem_funct3_i)
+        case (cache_req_funct3_q)
             3'b000: begin
                 // byte lanes
-                case (addr_low_w)
+                case (load_addr_low_w)
                     2'b00: load_data_w = load_byte0_signed_w;
                     2'b01: load_data_w = load_byte1_signed_w;
                     2'b10: load_data_w = load_byte2_signed_w;
@@ -160,14 +166,14 @@ module mem_stage
                 endcase
             end
             3'b001: begin
-                if (addr_half_w) begin
+                if (load_addr_half_w) begin
                     load_data_w = load_half1_signed_w;
                 end else begin
                     load_data_w = load_half0_signed_w;
                 end
             end
             3'b100: begin
-                case (addr_low_w)
+                case (load_addr_low_w)
                     2'b00: load_data_w = load_byte0_unsigned_w;
                     2'b01: load_data_w = load_byte1_unsigned_w;
                     2'b10: load_data_w = load_byte2_unsigned_w;
@@ -175,7 +181,7 @@ module mem_stage
                 endcase
             end
             3'b101: begin
-                if (addr_half_w) begin
+                if (load_addr_half_w) begin
                     load_data_w = load_half1_unsigned_w;
                 end else begin
                     load_data_w = load_half0_unsigned_w;
@@ -213,11 +219,17 @@ module mem_stage
     always_ff @(posedge clk_i) begin
         if (!rstn_i) begin
             cache_mem_req_pending_q <= 1'b0;
+            cache_req_addr_q <= '0;
+            cache_req_funct3_q <= '0;
         end else if (flush_i) begin
             cache_mem_req_pending_q <= 1'b0;
+            cache_req_addr_q <= '0;
+            cache_req_funct3_q <= '0;
         end else begin
             if (mem_cache_req_valid_o & cache_mem_req_ready_i) begin
                 cache_mem_req_pending_q <= 1'b1;
+                cache_req_addr_q <= ex_mem_alu_result_i;
+                cache_req_funct3_q <= ex_mem_funct3_i;
             end else if (cache_mem_rsp_valid_i & mem_cache_rsp_ready_o) begin
                 cache_mem_req_pending_q <= 1'b0;
             end

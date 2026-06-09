@@ -15,6 +15,7 @@ DEFAULT_SIGNATURE = Path(f"../../programs/compliance_I/{DEFAULT_TEST}/expected_s
 DEFAULT_EXPECTED = Path(f"../../programs/rv32i/{DEFAULT_TEST}/expected.txt")
 DEFAULT_IMEM_BASE = 0x0000
 DEFAULT_DMEM_BASE = 0x1000
+DEFAULT_DMEM_LOGICAL_BASE = 0x10000000
 DEFAULT_RUN_CYCLES = 100000
 
 def int_or_zero(value):
@@ -57,9 +58,40 @@ def expected_result():
     path = Path(os.getenv("EXPECTED_HEX", str(DEFAULT_EXPECTED)))
     return int(path.read_text().strip(), 16)
 
+def read_ram_word(dut, addr):
+    return int(dut.u_axil_dp_ram.mem[addr >> 2].value) & 0xffffffff
+
+def read_dcache_word(dut, addr, ram_addr=None):
+    if ram_addr is None:
+        ram_addr = addr
+
+    width = int(dut.WIDTH_P.value)
+    byte_lanes = width // 8
+    cache_size_bytes = int(dut.CACHE_SIZE_BYTES_P.value)
+    line_size_bytes = int(dut.CACHE_LINE_SIZE_BYTES_P.value)
+    ways = int(dut.CACHE_WAYS_P.value)
+    words_per_line = line_size_bytes // byte_lanes
+    sets = cache_size_bytes // line_size_bytes // ways
+    byte_offset_bits = byte_lanes.bit_length() - 1
+    word_offset_bits = words_per_line.bit_length() - 1
+    set_bits = sets.bit_length() - 1
+
+    word = (addr >> byte_offset_bits) & ((1 << word_offset_bits) - 1)
+    cache_set = (addr >> (byte_offset_bits + word_offset_bits)) & ((1 << set_bits) - 1)
+    tag = addr >> (byte_offset_bits + word_offset_bits + set_bits)
+
+    for line in range(ways):
+        valid = int(dut.u_dcache.valid_q[cache_set][line].value)
+        cached_tag = int(dut.u_dcache.tag_q[cache_set][line].value)
+        if valid and cached_tag == tag:
+            return int(dut.u_dcache.data_q[cache_set][line][word].value) & 0xffffffff
+
+    return read_ram_word(dut, ram_addr)
+
 def read_result(dut):
-    base_addr = int(os.getenv("DMEM_BASE", str(DEFAULT_DMEM_BASE)), 0)
-    return int(dut.u_axil_dp_ram.mem[base_addr >> 2].value) & 0xffffffff
+    ram_addr = int(os.getenv("DMEM_BASE", str(DEFAULT_DMEM_BASE)), 0)
+    logical_addr = int(os.getenv("DMEM_LOGICAL_BASE", str(DEFAULT_DMEM_LOGICAL_BASE)), 0)
+    return read_dcache_word(dut, logical_addr, ram_addr)
 
 def read_symbol(path, symbol):
     for line in Path(path).read_text().splitlines():
@@ -78,8 +110,8 @@ def read_signature_words(dut):
     ram_addr_width = int(os.getenv("RAM_ADDR_WIDTH_P", "20"), 0)
     ram_addr_mask = (1 << ram_addr_width) - 1
     signature_addr = read_symbol(map_path, "begin_signature")
-    word_index = (dmem_base + (signature_addr & ram_addr_mask)) >> 2
-    return [int(dut.u_axil_dp_ram.mem[word_index + i].value) & 0xffffffff for i in range(len(expected_signature_words()))]
+    ram_addr = dmem_base + (signature_addr & ram_addr_mask)
+    return [read_dcache_word(dut, signature_addr + i*4, ram_addr + i*4) for i in range(len(expected_signature_words()))]
 
 @cocotb.test()
 async def top_test(dut):

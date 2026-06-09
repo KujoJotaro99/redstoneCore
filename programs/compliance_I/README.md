@@ -31,14 +31,14 @@ From `rtl/top`, use:
 make compliance COMPLIANCE_REFERENCE=sail COMPLIANCE_I="$(make -s -C ../../programs/compliance_I list)"
 ```
 
-The Sail path expects `sail_riscv_sim` on `PATH`. Inside the Docker container, install the official ACT4-compatible Sail release with:
+The Sail path expects `/opt/sail-riscv/bin/sail_riscv_sim` by default. Inside the Docker container, install the official ACT4-compatible Sail release with:
 
 ```sh
 apt update
 apt install -y curl ca-certificates
-./programs/compliance_I/install_sail_riscv.sh /opt/sail-riscv
-export PATH=/opt/sail-riscv/bin:$PATH
-sail_riscv_sim --version
+mkdir -p /opt/sail-riscv
+curl --location https://github.com/riscv/sail-riscv/releases/download/0.11/sail-riscv-$(uname)-$(arch).tar.gz | tar xvz --directory=/opt/sail-riscv --strip-components=1
+/opt/sail-riscv/bin/sail_riscv_sim --version
 ```
 
 If the Sail binary has a different name or needs extra options:

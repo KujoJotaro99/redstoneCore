@@ -6,21 +6,21 @@ from cocotb.triggers import FallingEdge, Timer
 CLOCK_PERIOD_NS = 10
 
 
-class ModelManager:
+class MemoryModel:
     def __init__(self, dut):
         self.width = int(dut.WIDTH_P.value)
         self.byte_count = self.width // 8
         self.word_mod = 1 << self.width
-        self.memory_bytes = {}
+        self.data = {}
 
     def unsigned_word(self, value):
         return int(value) % self.word_mod
 
     def read_memory(self, addr):
         addr = int(addr)
-        if addr not in self.memory_bytes:
-            self.memory_bytes[addr] = list(self.unsigned_word(addr).to_bytes(self.byte_count, byteorder="little"))
-        return int.from_bytes(self.memory_bytes[addr], byteorder="little")
+        if addr not in self.data:
+            self.data[addr] = list(self.unsigned_word(addr).to_bytes(self.byte_count, byteorder="little"))
+        return int.from_bytes(self.data[addr], byteorder="little")
 
     def write_memory(self, addr, data, wstrb):
         addr = int(addr)
@@ -32,14 +32,19 @@ class ModelManager:
                 strobe_lanes.add(byte_idx)
 
         for byte_idx in strobe_lanes:
-            self.memory_bytes[addr][byte_idx] = data_bytes[byte_idx]
+            self.data[addr][byte_idx] = data_bytes[byte_idx]
+
+
+class ExpectedModel:
+    def __init__(self, memory):
+        self.memory = memory
 
     def run(self, input_data):
         write, addr, wdata, wstrb = input_data
         if write:
-            self.write_memory(addr, wdata, wstrb)
+            self.memory.write_memory(addr, wdata, wstrb)
             return 0
-        return self.read_memory(addr)
+        return self.memory.read_memory(addr)
 
 
 class InputManager:
@@ -92,9 +97,9 @@ class ScoreManager:
 
 
 class HandshakeManager:
-    def __init__(self, dut, model):
+    def __init__(self, dut, memory):
         self.dut = dut
-        self.model = model
+        self.memory = memory
         self.last_valid = False
         self.last_ready = False
         self.current = (0, 0, 0, 0)
@@ -132,10 +137,10 @@ class HandshakeManager:
             wstrb = int(self.dut.cache_mem_req_wstrb_o.value)
 
             if int(self.dut.cache_mem_req_write_o.value):
-                self.model.write_memory(addr, wdata, wstrb)
+                self.memory.write_memory(addr, wdata, wstrb)
                 self.mem_data = 0
             else:
-                self.mem_data = self.model.read_memory(addr)
+                self.mem_data = self.memory.read_memory(addr)
             self.mem_valid = True
 
         self.dut.mem_cache_rsp_valid_i.value = 1 if self.mem_valid else 0
@@ -161,10 +166,12 @@ class HandshakeManager:
 class TestManager:
     def __init__(self, dut, stream):
         self.dut = dut
-        self.model = ModelManager(dut)
-        self.handshake = HandshakeManager(dut, self.model)
+        self.expected_memory = MemoryModel(dut)
+        self.backing_memory = MemoryModel(dut)
+        self.expected_model = ExpectedModel(self.expected_memory)
+        self.handshake = HandshakeManager(dut, self.backing_memory)
         self.input = InputManager(self.handshake, stream)
-        self.scoreboard = ScoreManager(self.model, self.handshake)
+        self.scoreboard = ScoreManager(self.expected_model, self.handshake)
         self.expected = len(stream)
         self.checked = 0
 
@@ -186,7 +193,7 @@ class TestManager:
 
                 self.input.drive()
                 cycles += 1
-                assert cycles < (self.expected * 30 + 30), "dm_cache test timeout"
+                assert cycles < (self.expected * 120 + 120), "sa4_cache test timeout"
         finally:
             self.dut.module_cache_req_valid_i.value = 0
             self.dut.module_cache_req_write_i.value = 0
@@ -226,7 +233,7 @@ async def reset_test(dut):
 
 
 @cocotb.test(skip=False)
-async def test_dm_cache_cold_read_miss(dut):
+async def test_sa4_cache_cold_read_miss(dut):
     """read an address that is not cached yet, so the cache must fetch it from backing memory."""
     await clock_test(dut)
     await reset_test(dut)
@@ -240,7 +247,7 @@ async def test_dm_cache_cold_read_miss(dut):
 
 
 @cocotb.test(skip=False)
-async def test_dm_cache_read_hit_after_fill(dut):
+async def test_sa4_cache_read_hit_after_fill(dut):
     """read the same address twice, where the first read fills the cache and the second read should hit."""
     await clock_test(dut)
     await reset_test(dut)
@@ -255,7 +262,7 @@ async def test_dm_cache_read_hit_after_fill(dut):
 
 
 @cocotb.test(skip=False)
-async def test_dm_cache_write_hit_merge(dut):
+async def test_sa4_cache_write_hit_merge(dut):
     """read a word into the cache, write one byte of that cached word, then read back the merged word."""
     await clock_test(dut)
     await reset_test(dut)
@@ -271,8 +278,8 @@ async def test_dm_cache_write_hit_merge(dut):
 
 
 @cocotb.test(skip=False)
-async def test_dm_cache_write_miss_no_allocate(dut):
-    """write an address that is not cached yet, then read it back and expect backing memory to hold the write."""
+async def test_sa4_cache_write_miss_write_allocate(dut):
+    """write an address that is not cached yet, then read it back from the allocated line."""
     await clock_test(dut)
     await reset_test(dut)
 
@@ -286,7 +293,7 @@ async def test_dm_cache_write_miss_no_allocate(dut):
 
 
 @cocotb.test(skip=False)
-async def test_dm_cache_store_byte_strobes(dut):
+async def test_sa4_cache_store_byte_strobes(dut):
     """write one byte lane at a time and verify only that byte changes while other bytes stay saved."""
     await clock_test(dut)
     await reset_test(dut)
@@ -308,7 +315,7 @@ async def test_dm_cache_store_byte_strobes(dut):
 
 
 @cocotb.test(skip=False)
-async def test_dm_cache_store_halfword_strobes(dut):
+async def test_sa4_cache_store_halfword_strobes(dut):
     """write the low halfword and high halfword separately and verify only those two bytes change each time."""
     await clock_test(dut)
     await reset_test(dut)
@@ -326,7 +333,7 @@ async def test_dm_cache_store_halfword_strobes(dut):
 
 
 @cocotb.test(skip=False)
-async def test_dm_cache_store_word_strobe(dut):
+async def test_sa4_cache_store_word_strobe(dut):
     """write all four byte lanes at once and verify the whole cached word is replaced."""
     await clock_test(dut)
     await reset_test(dut)
@@ -342,14 +349,17 @@ async def test_dm_cache_store_word_strobe(dut):
 
 
 @cocotb.test(skip=False)
-async def test_dm_cache_index_alias_eviction(dut):
-    """read two addresses that map to the same cache slot and verify the newer tag evicts the older one."""
+async def test_sa4_cache_set_conflict_refill(dut):
+    """read several addresses that map to the same set and verify old lines can be refilled."""
     await clock_test(dut)
     await reset_test(dut)
 
-    line_count = int(dut.LINES_P.value)
+    cache_size_bytes = int(dut.CACHE_SIZE_BYTES_P.value)
+    line_size_bytes = int(dut.LINE_SIZE_BYTES_P.value)
+    ways = int(dut.WAYS_P.value)
+    set_count = cache_size_bytes // line_size_bytes // ways
     addr_a = 0x00
-    addr_b = line_count * 4
+    addr_b = set_count * line_size_bytes
     stream = [
         (0, addr_a, 0x00000000, 0b0000),
         (0, addr_b, 0x00000000, 0b0000),
@@ -361,7 +371,7 @@ async def test_dm_cache_index_alias_eviction(dut):
 
 
 @cocotb.test(skip=False)
-async def test_dm_cache_back_to_back_requests(dut):
+async def test_sa4_cache_back_to_back_requests(dut):
     """send requests one after another and verify the cache accepts the next request after each response."""
     await clock_test(dut)
     await reset_test(dut)
@@ -378,7 +388,7 @@ async def test_dm_cache_back_to_back_requests(dut):
 
 
 @cocotb.test(skip=False)
-async def test_dm_cache_read_only(dut):
+async def test_sa4_cache_read_only(dut):
     """run random reads only, covering a mix of first-time misses and repeated-address hits."""
     await clock_test(dut)
     await reset_test(dut)
@@ -394,8 +404,8 @@ async def test_dm_cache_read_only(dut):
 
 
 @cocotb.test(skip=False)
-async def test_dm_cache_write_only(dut):
-    """run random writes only, covering write-through behavior and random byte-lane strobes."""
+async def test_sa4_cache_write_only(dut):
+    """run random writes only, covering write-back behavior and random byte-lane strobes."""
     await clock_test(dut)
     await reset_test(dut)
 
@@ -413,7 +423,7 @@ async def test_dm_cache_write_only(dut):
 
 
 @cocotb.test(skip=False)
-async def test_dm_cache_read_write_mix(dut):
+async def test_sa4_cache_read_write_mix(dut):
     """run random reads and writes together and compare every response against byte-backed memory."""
     await clock_test(dut)
     await reset_test(dut)

@@ -8,7 +8,7 @@ TOPLEVEL := $(shell python3 -c "import json; print(json.load(open('$(FILELIST_JS
 
 VERILOG_SOURCES := $(FILELIST_SOURCES)
 
-MODULE := dm_cache_test
+MODULE := sa4_cache_test
 
 COCOTB_LOG_LEVEL ?= INFO
 SIM_BUILD ?= sim_build

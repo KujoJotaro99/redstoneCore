@@ -17,7 +17,7 @@ ifeq ($(PURE_RV32I_HARNESS),1)
 else
     ARCH_FLAGS := -march=rv32i_zicsr_zifencei -mabi=ilp32
 endif
-COMMON_FLAGS := $(ARCH_FLAGS) -DTEST_COMPLIANCE=$(TEST_COMPLIANCE) -DTEST_FLEN=32 -I. $(HARNESS_INCLUDE) -Ienv
+COMMON_FLAGS := $(ARCH_FLAGS) -DTEST_COMPLIANCE=$(TEST_COMPLIANCE) -DTEST_FLEN=32 -I. $(HARNESS_INCLUDE)
 ASFLAGS := $(COMMON_FLAGS) -x assembler-with-cpp
 LDFLAGS := $(ARCH_FLAGS) -nostdlib -nostartfiles -Wl,--no-relax -T link.ld
 
@@ -54,6 +54,9 @@ list:
 
 %/program.dump: %/program.elf
 	$(OBJDUMP) -d -s $< > $@
+
+%/program.map: %/program.elf
+	@true
 
 %/expected_signature.mem: %/program_imem.mem %/program_dmem.mem %/program.map generate_expected.py generate_sail_expected.py FORCE
 ifeq ($(REFERENCE_MODEL),sail)

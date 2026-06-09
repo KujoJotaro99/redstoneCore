@@ -18,7 +18,7 @@ RTL_SOURCES := \
 	../../rtl/alu/alu.sv \
 	../../rtl/ex_stage/ex_stage.sv \
 	../../rtl/mem_stage/mem_stage.sv \
-	../../rtl/dm_cache/dm_cache.sv \
+	../../rtl/sa4_cache/sa4_cache.sv \
 	../../rtl/axil_master/axil_master.sv \
 	../../submodules/imports/axil_dp_ram.v \
 	../../rtl/top/top.sv

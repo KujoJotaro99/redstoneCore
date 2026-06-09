@@ -13,7 +13,7 @@
         "../alu/alu.sv",
         "../ex_stage/ex_stage.sv",
         "../mem_stage/mem_stage.sv",
-        "../dm_cache/dm_cache.sv",
+        "../sa4_cache/sa4_cache.sv",
         "../axil_master/axil_master.sv",
         "../../submodules/imports/axil_dp_ram.v",
         "top.sv"
