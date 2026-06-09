@@ -37,12 +37,6 @@ RV32I computational/control/memory instruction support:
 | Upper immediates | `LUI`, `AUIPC` |
 | Memory ordering | `FENCE` as in-order no-op |
 
-Current assumptions:
-
-- 32-bit instruction fetch
-- byte-addressed data memory
-- byte, halfword, and word data accesses
-
 ## Architecture
 
 <p align="center">
