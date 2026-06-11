@@ -64,7 +64,8 @@ module id_stage
     // wb interface
     input logic [$clog2(DEPTH_P)-1:0] wb_id_rd_addr_i,
     input logic [WIDTH_P-1:0] wb_id_rd_data_i,
-    input logic [0:0] wb_id_rd_we_i
+    input logic [0:0] wb_id_rd_we_i,
+    input logic [1:0] wb_id_wb_sel_i
 
 );
 
@@ -321,7 +322,7 @@ module id_stage
             end
 
             // clear pending load and forwarded address matches pending address.
-            if (wb_id_rd_we_i && pending_load_valid_q && wb_id_rd_addr_i == pending_load_rd_addr_q) begin
+            if (wb_id_rd_we_i && wb_id_wb_sel_i == pkg::WB_MEM && pending_load_valid_q && wb_id_rd_addr_i == pending_load_rd_addr_q) begin
                 pending_load_valid_q <= 1'b0;
                 pending_load_rd_addr_q <= '0;
             end

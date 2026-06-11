@@ -50,7 +50,9 @@ module mem_stage
     output logic [$clog2(DEPTH_P)-1:0] wb_id_rd_addr_o,
     output logic [WIDTH_P-1:0] wb_id_rd_data_o,
     output logic [0:0] wb_id_rd_we_o,
+    output logic [1:0] wb_id_wb_sel_o,
     output logic [WIDTH_P-1:0] mem_wb_fwd_data_o,
+    output logic [WIDTH_P-1:0] cache_mem_load_data_o, // combinational load data for forward sel=3
     output logic [0:0] debug_valid_o,
     output logic [0:0] debug_instr_illegal_o,
     output logic [0:0] mem_access_fault_o
@@ -93,7 +95,6 @@ module mem_stage
     logic [WIDTH_P-1:0] mem_wb_alu_result_q;
     logic [WIDTH_P-1:0] mem_wb_load_data_q;
     logic [0:0] mem_wb_instr_illegal_q;
-    logic [1:0] mem_wb_wb_sel_q;
 
     assign cache_access_w = ex_mem_valid_i & (ex_mem_mem_read_i | ex_mem_mem_write_i); // if no read or write for instr, then passthrough
     assign wb_ready_w = ~stall_i;
@@ -193,7 +194,7 @@ module mem_stage
 
     // final writeback source mux
     always_comb begin
-        case (mem_wb_wb_sel_q)
+        case (wb_id_wb_sel_o)
             pkg::WB_MEM: wb_id_rd_data_o = mem_wb_load_data_q;
             pkg::WB_PC4: wb_id_rd_data_o = mem_wb_pc4_q;
             default: wb_id_rd_data_o = mem_wb_alu_result_q;
@@ -204,6 +205,7 @@ module mem_stage
     assign wb_id_rd_addr_o = mem_wb_rd_addr_o;
     assign wb_id_rd_we_o = mem_wb_valid_o & wb_ready_w & mem_wb_reg_write_o & ~mem_wb_instr_illegal_q;
     assign mem_wb_fwd_data_o = wb_id_rd_data_o;
+    assign cache_mem_load_data_o = load_data_w;
     assign debug_valid_o = mem_wb_valid_o & wb_ready_w;
     assign debug_instr_illegal_o = mem_wb_instr_illegal_q;
     assign mem_access_fault_o = cache_mem_rsp_valid_i & mem_cache_rsp_ready_o & (cache_mem_rsp_resp_i != 2'b00); // should never respond with issue in axi ram ip
@@ -247,7 +249,7 @@ module mem_stage
             mem_wb_rd_addr_o <= '0;
             mem_wb_reg_write_o <= 1'b0;
             mem_wb_instr_illegal_q <= 1'b0;
-            mem_wb_wb_sel_q <= pkg::WB_ALU;
+            wb_id_wb_sel_o <= pkg::WB_ALU;
         end else if (flush_i) begin
             mem_wb_valid_o <= 1'b0;
             mem_wb_pc_q <= '0;
@@ -257,7 +259,7 @@ module mem_stage
             mem_wb_rd_addr_o <= '0;
             mem_wb_reg_write_o <= 1'b0;
             mem_wb_instr_illegal_q <= 1'b0;
-            mem_wb_wb_sel_q <= pkg::WB_ALU;
+            wb_id_wb_sel_o <= pkg::WB_ALU;
         end else if (mem_ex_ready_o) begin
             mem_wb_valid_o <= ex_mem_valid_i;
             mem_wb_pc_q <= ex_mem_pc_i;
@@ -267,7 +269,7 @@ module mem_stage
             mem_wb_rd_addr_o <= ex_mem_rd_addr_i;
             mem_wb_reg_write_o <= ex_mem_reg_write_i;
             mem_wb_instr_illegal_q <= ex_mem_instr_illegal_i;
-            mem_wb_wb_sel_q <= ex_mem_wb_sel_i;
+            wb_id_wb_sel_o <= ex_mem_wb_sel_i;
         end
     end
 

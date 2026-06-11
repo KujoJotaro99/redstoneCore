@@ -46,43 +46,10 @@ module hazard_unit
         id_ex_rs1_fwd_sel_o = 2'd0;
         id_ex_rs2_fwd_sel_o = 2'd0;
 
-        // load use hazard: load results are not available from EX/MEM.
-        if (if_id_valid_i && id_ex_valid_i && id_ex_reg_write_i && id_ex_mem_read_i && id_ex_rd_addr_i != '0) begin
-            // IF/ID instruction uses rs1, ID/EX destination is not x0, and ID/EX destination matches IF/ID rs1.
-            if (rs1_used_i && id_ex_rd_addr_i != 0 && id_ex_rd_addr_i == rs1_addr_i) begin
-                if_id_stall_o = 1'b1;
-                id_ex_bubble_o = 1'b1;
-            end
-            // IF/ID instruction uses rs2, ID/EX destination is not x0, and ID/EX destination matches IF/ID rs2.
-            if (rs2_used_i && id_ex_rd_addr_i != 0 && id_ex_rd_addr_i == rs2_addr_i) begin
-                if_id_stall_o = 1'b1;
-                id_ex_bubble_o = 1'b1;
-            end
-        end
-
-        // pending load hazard: unknown latency load has not fully written back yet. 
-        if (if_id_valid_i && pending_load_valid_i && pending_load_rd_addr_i != '0) begin
-            // IF/ID instruction uses rs1, pending load destination is not x0, and pending load destination matches IF/ID rs1.
-            if (rs1_used_i && pending_load_rd_addr_i != 0 && pending_load_rd_addr_i == rs1_addr_i) begin
-                if_id_stall_o = 1'b1;
-                id_ex_bubble_o = 1'b1;
-            end
-            // IF/ID instruction uses rs2, pending load destination is not x0, and pending load destination matches IF/ID rs2.
-            if (rs2_used_i && pending_load_rd_addr_i != 0 && pending_load_rd_addr_i == rs2_addr_i) begin
-                if_id_stall_o = 1'b1;
-                id_ex_bubble_o = 1'b1;
-            end
-        end
-
-        // ex/mem load hazard: load data cannot be forwarded from EX/MEM.
-        if (if_id_valid_i && ex_mem_valid_i && ex_mem_reg_write_i && (ex_mem_wb_sel_i == pkg::WB_MEM) && ex_mem_rd_addr_i != '0) begin
-            // IF/ID instruction uses rs1, EX/MEM load destination is not x0, and EX/MEM destination matches IF/ID rs1.
-            if (rs1_used_i && ex_mem_rd_addr_i != 0 && ex_mem_rd_addr_i == rs1_addr_i) begin
-                if_id_stall_o = 1'b1;
-                id_ex_bubble_o = 1'b1;
-            end
-            // IF/ID instruction uses rs2, EX/MEM load destination is not x0, and EX/MEM destination matches IF/ID rs2.
-            if (rs2_used_i && ex_mem_rd_addr_i != 0 && ex_mem_rd_addr_i == rs2_addr_i) begin
+        // load hazard: covers the initial load-use cycle (load in id/ex, pending not set yet)
+        // and all subsequent cycles while the load is in flight (pending set, not yet written back).
+        if (if_id_valid_i) begin
+            if ((id_ex_valid_i && id_ex_reg_write_i && id_ex_mem_read_i && id_ex_rd_addr_i != '0 && (rs1_used_i && id_ex_rd_addr_i == rs1_addr_i || rs2_used_i && id_ex_rd_addr_i == rs2_addr_i)) || (pending_load_valid_i && pending_load_rd_addr_i != '0&& (rs1_used_i && pending_load_rd_addr_i == rs1_addr_i || rs2_used_i && pending_load_rd_addr_i == rs2_addr_i))) begin
                 if_id_stall_o = 1'b1;
                 id_ex_bubble_o = 1'b1;
             end

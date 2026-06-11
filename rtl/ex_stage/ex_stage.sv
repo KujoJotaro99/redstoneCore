@@ -53,6 +53,7 @@ module ex_stage
     // forwarding interface
     input logic [WIDTH_P-1:0] ex_mem_fwd_data_i,
     input logic [WIDTH_P-1:0] mem_wb_fwd_data_i,
+    input logic [WIDTH_P-1:0] cache_mem_load_data_i, // live load data from cache this cycle
     output logic [WIDTH_P-1:0] ex_mem_fwd_data_o,
 
     // mem interface
@@ -91,12 +92,14 @@ module ex_stage
         case (id_ex_rs1_fwd_sel_i)
             2'd1: rs1_data_w = ex_mem_fwd_data_i;
             2'd2: rs1_data_w = mem_wb_fwd_data_i;
+            2'd3: rs1_data_w = cache_mem_load_data_i;
             default: rs1_data_w = id_ex_rs1_data_i;
         endcase
 
         case (id_ex_rs2_fwd_sel_i)
             2'd1: rs2_data_w = ex_mem_fwd_data_i;
             2'd2: rs2_data_w = mem_wb_fwd_data_i;
+            2'd3: rs2_data_w = cache_mem_load_data_i;
             default: rs2_data_w = id_ex_rs2_data_i;
         endcase
     end

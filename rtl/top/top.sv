@@ -99,6 +99,7 @@ module top
     logic [$clog2(DEPTH_P)-1:0] wb_id_rd_addr_w;
     logic [WIDTH_P-1:0] wb_id_rd_data_w;
     logic [0:0] wb_id_rd_we_w;
+    logic [1:0] wb_id_wb_sel_w;
 
     logic [0:0] if_cache_req_valid_w;
     logic [0:0] cache_if_req_ready_w;
@@ -282,6 +283,7 @@ module top
         .id_ex_wb_sel_o(id_ex_wb_sel_w),
         .wb_id_rd_addr_i(wb_id_rd_addr_w),
         .wb_id_rd_data_i(wb_id_rd_data_w),
+        .wb_id_wb_sel_i(wb_id_wb_sel_w),
         .wb_id_rd_we_i(wb_id_rd_we_w)
     );
 
@@ -391,6 +393,7 @@ module top
         .wb_id_rd_addr_o(wb_id_rd_addr_w),
         .wb_id_rd_data_o(wb_id_rd_data_w),
         .wb_id_rd_we_o(wb_id_rd_we_w),
+        .wb_id_wb_sel_o(wb_id_wb_sel_w),
         .mem_wb_fwd_data_o(mem_wb_fwd_data_w),
         .debug_valid_o(debug_valid_o),
         .debug_instr_illegal_o(debug_instr_illegal_o),
