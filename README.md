@@ -100,8 +100,6 @@ cd programs/compliance_I
 make
 ```
 
-See `programs/README.md` for compliance program layout and Sail reference setup.
-
 ## Project Structure
 
 ```text
